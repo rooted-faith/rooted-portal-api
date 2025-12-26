@@ -85,10 +85,10 @@ class Configuration(BaseSettings):
     CORS_ALLOW_ORIGINS_REGEX: Optional[str] = os.getenv(key="CORS_ALLOW_ORIGINS_REGEX")
 
     # [AWS]
-    AWS_STORAGE_BUCKET_NAME: str = APP_NAME
-    AWS_ACCESS_KEY_ID: str = os.getenv(key="AWS_ACCESS_KEY_ID")
-    AWS_SECRET_ACCESS_KEY: str = os.getenv(key="AWS_SECRET_ACCESS_KEY")
-    AWS_S3_REGION_NAME: str = os.getenv(key="AWS_S3_REGION_NAME")
+    # AWS_STORAGE_BUCKET_NAME: str = APP_NAME
+    # AWS_ACCESS_KEY_ID: str = os.getenv(key="AWS_ACCESS_KEY_ID")
+    # AWS_SECRET_ACCESS_KEY: str = os.getenv(key="AWS_SECRET_ACCESS_KEY")
+    # AWS_S3_REGION_NAME: str = os.getenv(key="AWS_S3_REGION_NAME")
     AWS_S3_CACHE_CONTROL: str = os.getenv(
         key="AWS_S3_CACHE_CONTROL", default="max-age=86400"
     )
