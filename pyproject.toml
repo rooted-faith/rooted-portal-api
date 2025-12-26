@@ -1,0 +1,60 @@
+[tool.pytest.ini_options]
+testpaths = ["portal", "tests"]
+
+[project]
+name = "rooted-portal-api"
+version = "0.1.0"
+description = ""
+authors = [{ name = "Jay Hsia", email = "jayhsia1997@gmail.com" }]
+readme = "README.md"
+requires-python = "^3.13"
+dependencies = [
+    # base
+    "dependency-injector",
+    "fastapi",
+    "fastapi-limiter==0.1.6",
+    "gunicorn",
+    "uvicorn (==0.35.0)",
+    "pydantic",
+    "pydantic-settings",
+    "python-dotenv",
+    # db
+    "asyncpg",
+    "redis",
+    "sqlalchemy",
+    "psycopg2-binary==2.9.10",
+    # security
+    "pyjwt",
+    # utils
+    "boto3",
+    "cryptography",
+    "email-validator",
+    "httpx",
+    "ujson",
+    "pytz",
+    "pandas (==2.3.3)",
+    "numpy (==2.3.4)",
+    "phonenumbers",
+    "pyotp",
+    "python-dateutil==2.9.0.post0",
+    "python-multipart==0.0.20",
+    "pyyaml",
+    "sentry-sdk[fastapi]",
+    "pillow (>=11.3.0,<12.0.0)",
+    "aiosmtplib (>=5.0.0,<6.0.0)",
+    "jinja2 (>=3.1.6,<4.0.0)",
+]
+
+[tool.poetry]
+package-mode = false
+
+[tool.poetry.group.dev.dependencies]
+alembic = "*"
+pytest = "*"
+pytest-asyncio = "*"
+pytest-mock = "*"
+click = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
