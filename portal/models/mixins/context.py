@@ -2,7 +2,6 @@ import uuid
 
 from portal.libs.contexts.user_context import get_user_context
 
-
 SYSTEM_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
 def get_current_username():

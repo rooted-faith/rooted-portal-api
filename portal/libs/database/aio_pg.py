@@ -3,13 +3,13 @@ PostgreSQL connection manager
 """
 import asyncio
 from enum import Enum
-from typing import Optional, Dict, Any
+from typing import Any
 
 import asyncpg
 
 from portal.config import settings
 
-__all__ = ["PostgresConnection", "PostgresConnection", "ConnectionType"]
+__all__ = ["ConnectionType", "PostgresConnection", "PostgresConnection"]
 
 
 class ConnectionType(Enum):
@@ -21,14 +21,14 @@ class PostgresContext:
     def __init__(
         self,
         key: str,
-        schema: str = None,
-        application_name: str = None,
+        schema: str | None = None,
+        application_name: str | None = None,
         **connect_kwargs
     ):
         self.key: str = key
         self.schema: str = schema
         self.application_name: str = application_name
-        self.pool: Optional[asyncpg.pool.Pool] = None
+        self.pool: asyncpg.pool.Pool | None = None
         self.connect_kwargs: dict = connect_kwargs
 
 
@@ -36,13 +36,13 @@ class PostgresConnection:
     """PostgreSQL connection pool manager"""
 
     def __init__(self):
-        self._contexts: Dict[str, PostgresContext] = {}
+        self._contexts: dict[str, PostgresContext] = {}
         self._lock = asyncio.Lock()
 
     async def create_connection(
         self,
         connection_type: ConnectionType = ConnectionType.DEFAULT,
-        command_timeout: int = None,
+        command_timeout: int | None = None,
         loop=None,
     ):
         match connection_type:
@@ -59,7 +59,7 @@ class PostgresConnection:
     async def _create_pool(
         self,
         connection_type: ConnectionType = ConnectionType.POOL,
-        command_timeout: int = None
+        command_timeout: int | None = None
     ) -> asyncpg.pool.Pool:
         """Create a connection pool"""
         context = self._get_context(connection_type)
@@ -95,7 +95,7 @@ class PostgresConnection:
     async def _create_connection(
         self,
         connection_type: ConnectionType = ConnectionType.DEFAULT,
-        command_timeout: int = None,
+        command_timeout: int | None = None,
         loop=None,
     ) -> asyncpg.Connection:
         """Create a single connection"""
@@ -125,13 +125,13 @@ class PostgresConnection:
             loop=loop
         )
 
-    async def _create_server_settings(self, context: PostgresContext) -> Optional[Dict[str, Any]]:
+    async def _create_server_settings(self, context: PostgresContext) -> dict[str, Any] | None:
         """Create server settings for connection"""
         if context.application_name:
             return {'application_name': context.application_name}
         return None
 
-    def _setup(self, connection_type: ConnectionType = ConnectionType.DEFAULT, application_name: str = None, **kwargs) -> PostgresContext:
+    def _setup(self, connection_type: ConnectionType = ConnectionType.DEFAULT, application_name: str | None = None, **kwargs) -> PostgresContext:
         """Setup a database context"""
         if not kwargs:
             raise TypeError('kwargs is not null')
@@ -144,7 +144,7 @@ class PostgresConnection:
 
         return self._contexts[key]
 
-    def _get_context(self, connection_type: ConnectionType = ConnectionType.DEFAULT) -> Optional[PostgresContext]:
+    def _get_context(self, connection_type: ConnectionType = ConnectionType.DEFAULT) -> PostgresContext | None:
         """Get a database context by key"""
         real_key = connection_type.value if isinstance(connection_type, ConnectionType) else str(connection_type)
         return self._contexts.get(real_key, None)

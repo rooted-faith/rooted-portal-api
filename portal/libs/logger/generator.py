@@ -5,10 +5,10 @@ import logging
 import sys
 
 from .const import (
-    DEFAULT_LOG_LEVEL,
-    MAP_ENV_LEVEL,
     DEFAULT_FORMAT,
     DEFAULT_FORMAT_DATE,
+    DEFAULT_LOG_LEVEL,
+    MAP_ENV_LEVEL,
 )
 
 
@@ -38,7 +38,7 @@ class LoggerGenerator:
         :return:
         """
         env = env.lower()
-        if env in MAP_ENV_LEVEL.keys():
+        if env in MAP_ENV_LEVEL:
             self.log_level = MAP_ENV_LEVEL[env]
         else:
             self.log_level = logging.INFO

@@ -1,14 +1,13 @@
 """
 Auth schemas
 """
-from typing import Optional
 from pydantic import BaseModel
 
 
 class TokenPayload(BaseModel):
     """Token payload"""
-    uid: Optional[str] = None
-    email: Optional[str] = None
-    phone_number: Optional[str] = None
+    uid: str | None = None
+    email: str | None = None
+    phone_number: str | None = None
     verified: bool = False
 

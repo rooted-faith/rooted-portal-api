@@ -3,7 +3,6 @@ ModelBase class for SQLAlchemy ORM
 """
 import re
 import uuid
-from typing import Optional
 
 import sqlalchemy as sa
 from sqlalchemy import Column, MetaData
@@ -14,7 +13,7 @@ from sqlalchemy.orm import DeclarativeBase
 from portal.config import settings
 
 
-def merge_table_args(*args) -> Optional[tuple]:
+def merge_table_args(*args) -> tuple | None:
     """
 
     :param args:
@@ -56,8 +55,8 @@ class Base(DeclarativeBase):
     def __getitem__(self, item):
         try:
             return getattr(self, item)
-        except AttributeError:
-            raise KeyError(item)
+        except AttributeError as exc:
+            raise KeyError(item) from exc
 
     @declared_attr
     def __tablename__(cls) -> str:
@@ -67,11 +66,10 @@ class Base(DeclarativeBase):
         :return:
         """
         name = cls.__name__
-        snake = re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
-        return snake
+        return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
     @declared_attr
-    def __table_args__(cls) -> Optional[tuple]:
+    def __table_args__(cls) -> tuple | None:
         """
 
         :return:

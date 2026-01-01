@@ -3,14 +3,14 @@ Audit information
 """
 import pytz
 import sqlalchemy as sa
-from sqlalchemy import Column, DateTime, String, text, Float, Boolean
+from sqlalchemy import Boolean, Column, DateTime, Float, String, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declared_attr
 
 from .context import get_current_id, get_current_username
 
 
-class SortableMixin(object):
+class SortableMixin:
     """SortableMixin"""
 
     @declared_attr
@@ -26,7 +26,7 @@ class SortableMixin(object):
         )
 
 
-class AuditCreatedAtMixin(object):
+class AuditCreatedAtMixin:
     """AuditCreatedAtMixin"""
 
     @declared_attr
@@ -43,7 +43,7 @@ class AuditCreatedAtMixin(object):
         )
 
 
-class AuditCreatedByMixin(object):
+class AuditCreatedByMixin:
     """AuditCreatedByMixin"""
 
     @declared_attr
@@ -72,7 +72,7 @@ class AuditCreatedMixin(AuditCreatedAtMixin, AuditCreatedByMixin):
         return Column(UUID, default=get_current_id, comment="Create User ID")
 
 
-class AuditUpdatedAtMixin(object):
+class AuditUpdatedAtMixin:
     """AuditUpdatedAtMixin"""
 
     @declared_attr
@@ -91,7 +91,7 @@ class AuditUpdatedAtMixin(object):
         )
 
 
-class AuditUpdatedByMixin(object):
+class AuditUpdatedByMixin:
     """AuditUpdatedByMixin"""
 
     @declared_attr
@@ -123,10 +123,9 @@ class AuditUpdatedMixin(AuditUpdatedAtMixin, AuditUpdatedByMixin):
 
 class AuditMixin(AuditCreatedMixin, AuditUpdatedMixin):
     """AuditMixin"""
-    pass
 
 
-class DeletedMixin(object):
+class DeletedMixin:
     """DeletedMixin"""
 
     @declared_attr
@@ -151,7 +150,7 @@ class DeletedMixin(object):
         )
 
 
-class DescriptionMixin(object):
+class DescriptionMixin:
     """DescriptionMixin"""
 
     @declared_attr
@@ -163,7 +162,7 @@ class DescriptionMixin(object):
         return Column(sa.Text, comment="Description")
 
 
-class RemarkMixin(object):
+class RemarkMixin:
     """RemarkMixin"""
 
     @declared_attr
@@ -180,4 +179,3 @@ class BaseMixin(AuditMixin, DeletedMixin, DescriptionMixin, RemarkMixin):
     BaseMixin
     Contains audit information, logical deletion, description, and remark
     """
-    pass

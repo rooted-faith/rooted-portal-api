@@ -1,7 +1,7 @@
 """
 Exception for APIs
 """
-from typing import Any, Optional, Dict
+from typing import Any
 
 from fastapi import HTTPException
 from starlette import status
@@ -32,7 +32,7 @@ class ApiBaseException(HTTPException):
         self,
         status_code: int,
         detail: Any = None,
-        headers: Optional[Dict[str, Any]] = None,
+        headers: dict[str, Any] | None = None,
         **kwargs
     ):
         super().__init__(
@@ -51,8 +51,8 @@ class BadRequestException(ApiBaseException):
 
     def __init__(
         self,
-        detail: str = None,
-        headers: Optional[Dict[str, Any]] = None,
+        detail: str | None = None,
+        headers: dict[str, Any] | None = None,
         **kwargs
     ):
         super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail, headers=headers)
@@ -72,7 +72,7 @@ class NotFoundException(ApiBaseException):
     def __init__(
         self,
         detail: str,
-        headers: Optional[Dict[str, Any]] = None,
+        headers: dict[str, Any] | None = None,
         **kwargs
     ):
         super().__init__(status_code=status.HTTP_404_NOT_FOUND, detail=detail, headers=headers)
@@ -88,7 +88,7 @@ class ConflictErrorException(ApiBaseException):
     def __init__(
         self,
         detail: str,
-        headers: Optional[Dict[str, Any]] = None,
+        headers: dict[str, Any] | None = None,
         **kwargs
     ):
         super().__init__(status_code=status.HTTP_409_CONFLICT, detail=detail, headers=headers)
@@ -104,7 +104,7 @@ class EntityTooLargeException(ApiBaseException):
     def __init__(
         self,
         detail: str = "Uploaded file size exceeds the limit",
-        headers: Optional[Dict[str, Any]] = None,
+        headers: dict[str, Any] | None = None,
         **kwargs
     ):
         super().__init__(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=detail, headers=headers)
@@ -120,7 +120,7 @@ class NotImplementedException(ApiBaseException):
     def __init__(
         self,
         detail: str,
-        headers: Optional[Dict[str, Any]] = None,
+        headers: dict[str, Any] | None = None,
         **kwargs
     ):
         super().__init__(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=detail, headers=headers)

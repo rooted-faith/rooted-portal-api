@@ -6,7 +6,7 @@ import logging
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional, Any, Type, Tuple
+from typing import Any
 
 import yaml
 from dotenv import load_dotenv
@@ -40,7 +40,7 @@ class CustomSource(EnvSettingsSource):
         if field.annotation is bool:
             return Converter.to_bool(value, default=field.default or False)
         if isinstance(list[str], type(field.annotation)):
-            return [v for v in value.split(",")]
+            return list(value.split(","))
         return value
 
 
@@ -52,12 +52,12 @@ class Configuration(BaseSettings):
     @classmethod
     def settings_customise_sources(
         cls,
-        settings_cls: Type[BaseSettings],
+        settings_cls: type[BaseSettings],
         init_settings: PydanticBaseSettingsSource,
         env_settings: PydanticBaseSettingsSource,
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
-    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
         return (CustomSource(settings_cls),)
 
     # [App Base]
@@ -82,7 +82,7 @@ class Configuration(BaseSettings):
     CORS_ALLOWED_ORIGINS: list[str] = os.getenv(
         key="CORS_ALLOWED_ORIGINS", default="*"
     ).split()
-    CORS_ALLOW_ORIGINS_REGEX: Optional[str] = os.getenv(key="CORS_ALLOW_ORIGINS_REGEX")
+    CORS_ALLOW_ORIGINS_REGEX: str | None = os.getenv(key="CORS_ALLOW_ORIGINS_REGEX")
 
     # [AWS]
     # AWS_STORAGE_BUCKET_NAME: str = APP_NAME
@@ -97,7 +97,7 @@ class Configuration(BaseSettings):
     )  # 5MB
 
     # [Redis]
-    REDIS_URL: Optional[str] = os.getenv(key="REDIS_URL")
+    REDIS_URL: str | None = os.getenv(key="REDIS_URL")
     REDIS_DB: int = int(os.getenv(key="REDIS_DB", default="0"))
 
     # [Database]
@@ -152,11 +152,11 @@ class Configuration(BaseSettings):
     )
 
     # [Rate Limiting]
-    # 限流器配置從 YAML 檔案載入，見 _load_rate_limiters_config 方法
-    RATE_LIMITERS_CONFIG: Optional[RateLimitersConfig] = None
+    # Rate limiters configuration is loaded from the YAML file, see `_load_rate_limiters_config` method
+    RATE_LIMITERS_CONFIG: RateLimitersConfig | None = None
 
     # [Sentry]
-    SENTRY_URL: Optional[str] = os.getenv(key="SENTRY_URL")
+    SENTRY_URL: str | None = os.getenv(key="SENTRY_URL")
 
     # [Logging]
     SENSITIVE_PARAMS: set[str] = set(
@@ -204,7 +204,7 @@ class Configuration(BaseSettings):
                     f"Failed to load rate limiters config from {candidate_path}: {exc}"
                 )
 
-        # 如果沒有載入到配置，使用預設值
+        # Use default values if no configuration is loaded
         if not self.RATE_LIMITERS_CONFIG:
             logger = logging.getLogger(self.APP_NAME)
             logger.warning("Rate limiters config not found, using default values")
@@ -238,7 +238,7 @@ class Configuration(BaseSettings):
         return self.ENV.lower() not in ("prod", "stg")
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Configuration:
     return Configuration()
 

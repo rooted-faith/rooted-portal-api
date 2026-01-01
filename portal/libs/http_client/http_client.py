@@ -4,13 +4,15 @@ import json
 import logging
 import sys
 import time
+from collections.abc import AsyncIterator
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Union, overload, AsyncIterator
+from typing import Any, overload
 
 import httpx
-from portal.config import settings
 from httpx._types import FileTypes  # noqa
+
+from portal.config import settings
 
 request_logger = logging.getLogger("http_client")
 handler = logging.StreamHandler(sys.stdout)
@@ -39,16 +41,16 @@ class HttpOptions:
     # pylint: disable=too-many-instance-attributes
     url: str = None
     verbose: bool = None
-    timeout: Optional[int] = None
-    max_retries: Optional[int] = None
-    retry_interval: Optional[int] = None
-    query: Optional[dict] = None
-    content: Optional[Union[str, bytes]] = None
-    form: Optional[dict] = None
-    json: Optional[dict] = None
-    files: Optional[dict] = None
-    headers: Optional[dict] = None
-    cookies: Optional[dict] = None
+    timeout: int | None = None
+    max_retries: int | None = None
+    retry_interval: int | None = None
+    query: dict | None = None
+    content: str | bytes | None = None
+    form: dict | None = None
+    json: dict | None = None
+    files: dict | None = None
+    headers: dict | None = None
+    cookies: dict | None = None
     redirects: bool = True
     verify: bool = True
 
@@ -138,7 +140,7 @@ class HttpResponse:
 
     async def aiter_bytes(
         self,
-        chunk_size: Optional[int] = None
+        chunk_size: int | None = None
     ) -> AsyncIterator[bytes]:
         """
 
@@ -155,7 +157,7 @@ class HttpSession:
     def __init__(self, url: str, defaults: HttpDefaults = None, options: HttpOptions = None):
         self._options = options or HttpOptions()
         self._options.url = url
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
         self._from_session: bool = False
         self.defaults: HttpDefaults = defaults
         self._st = time.time()
@@ -215,7 +217,7 @@ class HttpSession:
         self._set_options_dict_value('headers', name, value)
         return self
 
-    def add_headers(self, headers: Dict[str, str]):
+    def add_headers(self, headers: dict[str, str]):
         """add_headers"""
         if not headers:
             return self
@@ -233,23 +235,20 @@ class HttpSession:
     @overload
     def add_query(self, data: dict) -> 'HttpSession':
         """add_query"""
-        pass
 
     @overload
     def add_query(self, name: str, value: Any) -> 'HttpSession':
         """add_query"""
-        pass
 
-    def add_query(self, name: Union[dict, str], value: Any = None) -> 'HttpSession':
+    def add_query(self, name: dict | str, value: Any = None) -> 'HttpSession':
         """add_query"""
         return self._add_item('query', name, value)
 
     @overload
-    def add_content(self, content: Union[str, bytes]) -> 'HttpSession':
+    def add_content(self, content: str | bytes) -> 'HttpSession':
         """add_content"""
-        pass
 
-    def add_content(self, content: Union[str, bytes]) -> 'HttpSession':
+    def add_content(self, content: str | bytes) -> 'HttpSession':
         """add_content"""
         if not content:
             return self
@@ -266,11 +265,11 @@ class HttpSession:
         """add_form"""
         return self
 
-    def add_form(self, name: Union[dict, str], value: Any = None) -> 'HttpSession':
+    def add_form(self, name: dict | str, value: Any = None) -> 'HttpSession':
         """add_form"""
         return self._add_item('form', name, value)
 
-    def _add_item(self, key: str, name: Union[dict, str], value: Any = None):
+    def _add_item(self, key: str, name: dict | str, value: Any = None):
         if not name and value is None:
             return self
         if isinstance(name, dict):
@@ -289,7 +288,6 @@ class HttpSession:
     @overload
     def add_file(self, name: str, file: FileTypes):
         """add_file"""
-        pass
 
     def add_file(self, name: str, file: FileTypes):
         """add_file"""
@@ -338,14 +336,14 @@ class HttpSession:
         url = self._build_url()
         headers = self._options.headers or {}
         params = self._options.query or {}
-        request_params = dict(
-            url=url,
-            headers=headers,
-            cookies=self._options.cookies,
-            timeout=self._options.timeout or self.defaults.timeout,
-            follow_redirects=self._options.redirects,
-        )
-        request_params['params'] = params
+        request_params = {
+            "url": url,
+            "headers": headers,
+            "cookies": self._options.cookies,
+            "timeout": self._options.timeout or self.defaults.timeout,
+            "follow_redirects": self._options.redirects,
+        }
+        request_params["params"] = params
         if http_method in ('GET', 'DELETE'):
             # pylint: disable=deprecated-method
             if self._options.form:
@@ -381,7 +379,7 @@ class HttpSession:
             if key in ('url', 'params'):
                 continue
             if key == 'headers':
-                for h_key, h_value in value.items():
+                for h_key, _ in value.items():
                     if h_key.lower() in ["authorization"]:
                         copy_value.pop(h_key)
             if not value:
@@ -430,12 +428,12 @@ class HttpSession:
     ):
         if not is_last_time:
             request_logger.debug(
-                f'{method.upper()} {self._options.url} {str(exception)} '
+                f'{method.upper()} {self._options.url} {exception!s} '
                 f'Ready to retry {retry_count + 1} times'
             )
         else:
             request_logger.debug(
-                f'{method.upper()} {self._options.url} {str(exception)} '
+                f'{method.upper()} {self._options.url} {exception!s} '
                 f'Maximum number of retries reached'
             )
 
@@ -484,7 +482,7 @@ class HttpSession:
                     continue
                 return formatted_response
             except (
-                asyncio.TimeoutError,
+                TimeoutError,
                 ConnectionRefusedError,
                 httpx.ConnectError,
                 httpx.ConnectTimeout,
@@ -553,7 +551,7 @@ class HttpSession:
                     await self._client.aclose()
                 return formatted_response
             except (
-                asyncio.TimeoutError,
+                TimeoutError,
                 ConnectionRefusedError,
                 httpx.ConnectTimeout,
                 httpx.ConnectError,
@@ -591,7 +589,7 @@ class HttpClient:
     def __init__(self, defaults: HttpDefaults = None):
         self.defaults: HttpDefaults = defaults or HttpDefaults(verbose=settings.is_dev)
 
-    def create(self, url: str = None) -> HttpSession:
+    def create(self, url: str | None = None) -> HttpSession:
         """
         :param url:
         :return:

@@ -3,18 +3,18 @@ Converter class for converting various data types.
 """
 import re
 import uuid
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
-from typing import TypeVar, Union, Any
+from typing import Any, TypeVar
 
 from portal.exceptions.validation_errors import (
-    IntError,
-    FloatError,
     BoolError,
     DateError,
     DateTimeError,
-    UUIDError,
+    FloatError,
+    IntError,
     ListError,
+    UUIDError,
 )
 from portal.libs.shared import validator
 
@@ -24,7 +24,7 @@ T = TypeVar('T')
 class Converter:
 
     @classmethod
-    def to_int(cls, value: Union[str, int, float], default: int = None, raise_error: bool = False):
+    def to_int(cls, value: str | int | float, default: int | None = None, raise_error: bool = False):
         """
         :param value:
         :param default:
@@ -40,7 +40,7 @@ class Converter:
         return default or value
 
     @classmethod
-    def to_bool(cls, value: Union[str, bool], default: bool = None, raise_error: bool = False):
+    def to_bool(cls, value: str | bool, default: bool | None = None, raise_error: bool = False):
         """
         :param raise_error:
         :param value:
@@ -58,7 +58,7 @@ class Converter:
         return False
 
     @classmethod
-    def to_float(cls, value, default: float = None, raise_error: bool = False):
+    def to_float(cls, value, default: float | None = None, raise_error: bool = False):
         if validator.is_number(value):
             return float(value)
         if raise_error:
@@ -86,7 +86,7 @@ class Converter:
         return default or value
 
     @classmethod
-    def to_date(cls, value: Any, default: date = None, raise_error: bool = False):
+    def to_date(cls, value: Any, default: date | None = None, raise_error: bool = False):
         """
         :param raise_error:
         :param value:
@@ -110,7 +110,7 @@ class Converter:
         :param raise_error:
         :return:
         """
-        if isinstance(value, int) or isinstance(value, float):
+        if isinstance(value, (int, float)):
             m, s = divmod(value, 60)
             h, m = divmod(m, 60)
             return int(h), int(m), format(s, ".1f")
@@ -136,7 +136,7 @@ class Converter:
         return result.hex
 
     @classmethod
-    def to_list(cls, value: Union[str, list], separator: str = ',', default_value: list = None):
+    def to_list(cls, value: str | list, separator: str = ',', default_value: list | None = None):
         if not value:
             return default_value
         if isinstance(value, list):
@@ -153,11 +153,11 @@ class Converter:
     def format_value(cls, value: Any):
         if isinstance(value, uuid.UUID):
             return value
-        elif isinstance(value, datetime):
+        if isinstance(value, datetime):
             return value.strftime("%Y-%m-%d %H:%M:%S")
-        elif isinstance(value, date):
+        if isinstance(value, date):
             return value.strftime("%Y-%m-%d")
-        elif isinstance(value, Decimal):
+        if isinstance(value, Decimal):
             return int(value)
         return value
 

@@ -1,18 +1,23 @@
 """
 Bible models
 """
+
 import sqlalchemy as sa
 from sqlalchemy import Column, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 
 from portal.libs.database.orm import ModelBase
+
 from .mixins import AuditCreatedAtMixin, AuditUpdatedAtMixin, SortableMixin
 
 
 class BibleVersion(ModelBase, AuditCreatedAtMixin, AuditUpdatedAtMixin):
-    """Bible Version Model"""
+    """
+    Bible Version Model
+    """
+
     __tablename__ = "bible_versions"
-    
+
     youversion_bible_id = Column(sa.String(20), nullable=False, unique=True, comment="YouVersion bible_id, e.g., '1392'", index=True)
     abbreviation = Column(sa.String(50), nullable=False, comment="English abbreviation, e.g., 'CCBT'")
     title = Column(sa.String(255), nullable=False, comment="English title")
@@ -26,27 +31,19 @@ class BibleVersion(ModelBase, AuditCreatedAtMixin, AuditUpdatedAtMixin):
     organization_id = Column(UUID, nullable=True, comment="Organization ID")
     is_active = Column(sa.Boolean, default=True, nullable=False, comment="Is version active", index=True)
 
-    __table_args__ = (
-        {"comment": "Bible versions table"},
-    )
+    __table_args__ = ({"comment": "Bible versions table"},)
 
 
 class BibleBook(ModelBase, AuditCreatedAtMixin, AuditUpdatedAtMixin, SortableMixin):
-    """Bible Book Model
-    
+    """
+    Bible Book Model
     Note: Book belongs to a Bible version. Each version has its own set of books.
     This design simplifies BibleVerse structure (only needs book_id instead of both version_id and book_id).
-    Uses SortableMixin.sequence for ordering books in standard Bible order (1-66).
     """
+
     __tablename__ = "bible_books"
-    
-    bible_version_id = Column(
-        UUID,
-        sa.ForeignKey("bible_versions.id", ondelete="CASCADE"),
-        nullable=False,
-        comment="Bible version ID",
-        index=True
-    )
+
+    bible_version_id = Column(UUID, sa.ForeignKey("bible_versions.id", ondelete="CASCADE"), nullable=False, comment="Bible version ID", index=True)
     book_code = Column(sa.String(10), nullable=False, comment="Book code, e.g., 'GEN', 'MAT'", index=True)
     title = Column(sa.String(100), nullable=False, comment="Book title")
     full_title = Column(sa.String(100), nullable=True, comment="Full book title")
@@ -61,19 +58,16 @@ class BibleBook(ModelBase, AuditCreatedAtMixin, AuditUpdatedAtMixin, SortableMix
 
 
 class BibleVerse(ModelBase, AuditCreatedAtMixin, AuditUpdatedAtMixin):
-    """Bible Verse Model
-    
-    Note: Verse belongs to a book. Since book belongs to a version, 
+    """
+    Bible Verse Model
+    Note: Verse belongs to a book. Since book belongs to a version,
     we only need book_id to identify both the book and the version.
     """
+
     __tablename__ = "bible_verses"
-    
+
     book_id = Column(
-        UUID,
-        sa.ForeignKey("bible_books.id", ondelete="CASCADE"),
-        nullable=False,
-        comment="Book ID (which also identifies the version)",
-        index=True
+        UUID, sa.ForeignKey("bible_books.id", ondelete="CASCADE"), nullable=False, comment="Book ID (which also identifies the version)", index=True
     )
     chapter = Column(sa.Integer, nullable=False, comment="Chapter number", index=True)
     verse = Column(sa.Integer, nullable=False, comment="Verse number", index=True)

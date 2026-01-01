@@ -1,8 +1,14 @@
+"""
+Session proxy for request-scoped database session.
+"""
 import asyncio
-from typing import Optional, Any, Callable
+from typing import TYPE_CHECKING, Any
 
-from portal.libs.database import Session
 from portal.libs.contexts.request_session_context import get_request_session
+from portal.libs.database import Session
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class SessionProxy:
@@ -13,7 +19,7 @@ class SessionProxy:
 
     def __init__(self) -> None:
         # Intentionally stateless; session is resolved per access from context
-        self._noop: Optional[Callable[..., Any]] = None
+        self._noop: Callable[..., Any] | None = None
 
     def _resolve(self) -> Session:
         session = get_request_session()

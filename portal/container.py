@@ -5,7 +5,7 @@ from dependency_injector import containers, providers
 
 from portal import handlers
 from portal.config import settings
-from portal.libs.database import RedisPool, PostgresConnection, Session
+from portal.libs.database import PostgresConnection, RedisPool, Session
 from portal.libs.database.session_proxy import SessionProxy
 
 

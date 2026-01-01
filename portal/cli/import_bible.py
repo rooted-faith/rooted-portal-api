@@ -12,25 +12,25 @@ import click
 
 from portal.container import Container
 from portal.libs.logger import logger
-from portal.models import BibleVersion, BibleBook, BibleVerse
+from portal.models import BibleBook, BibleVerse, BibleVersion
 
 
 async def import_bible_data(bible_id: str, data_dir: str = "bible_data"):
     """
     Import Bible data from bible_data directory to database
-    
+
     :param bible_id: Bible ID (e.g., '1392')
     :param data_dir: Directory containing bible data (default: 'bible_data')
     """
     container = Container()
     session = container.db_session()
-    
+
     bible_dir = Path(data_dir) / bible_id
     meta_dir = bible_dir / "meta"
     bible_json_path = meta_dir / "bible.json"
     index_json_path = meta_dir / "index.json"
     passages_db_path = bible_dir / "passages.db"
-    
+
     # Check if files exist
     if not bible_json_path.exists():
         raise FileNotFoundError(f"Bible metadata not found: {bible_json_path}")
@@ -38,13 +38,13 @@ async def import_bible_data(bible_id: str, data_dir: str = "bible_data"):
         raise FileNotFoundError(f"Bible index not found: {index_json_path}")
     if not passages_db_path.exists():
         raise FileNotFoundError(f"Passages database not found: {passages_db_path}")
-    
+
     try:
         # 1. Load and import Bible Version
         click.echo(f"Loading Bible version data from {bible_json_path}...")
-        with open(bible_json_path, "r", encoding="utf-8") as f:
+        with open(bible_json_path, encoding="utf-8") as f:
             bible_meta = json.load(f)
-        
+
         # Convert organization_id to UUID if present
         organization_id = None
         if bible_meta.get("organization_id"):
@@ -52,7 +52,7 @@ async def import_bible_data(bible_id: str, data_dir: str = "bible_data"):
                 organization_id = UUID(bible_meta["organization_id"])
             except (ValueError, TypeError):
                 logger.warning(f"Invalid organization_id: {bible_meta.get('organization_id')}")
-        
+
         click.echo(f"Importing Bible version: {bible_meta.get('localized_title', bible_meta.get('title'))}...")
         await (
             session.insert(BibleVersion)
@@ -89,7 +89,7 @@ async def import_bible_data(bible_id: str, data_dir: str = "bible_data"):
             .execute()
         )
         await session.commit()
-        
+
         # Get the version ID
         version = await (
             session.select(BibleVersion.id)
@@ -98,36 +98,36 @@ async def import_bible_data(bible_id: str, data_dir: str = "bible_data"):
         )
         if not version:
             raise ValueError(f"Failed to get Bible version ID for {bible_meta['id']}")
-        
+
         click.echo(f"Bible version imported: {version}")
-        
+
         # 2. Load and import Bible Books
         click.echo(f"Loading Bible books data from {index_json_path}...")
-        with open(index_json_path, "r", encoding="utf-8") as f:
+        with open(index_json_path, encoding="utf-8") as f:
             index_data = json.load(f)
-        
+
         books_data = index_data.get("books", [])
         click.echo(f"Importing {len(books_data)} books...")
-        
+
         book_id_map = {}  # Map book_code to book_id (UUID)
         base_timestamp = time.time()  # Base timestamp for sequence calculation
         sort_order = 1  # Sort order (1-66 for standard Bible book order)
-        
+
         for book_data in books_data:
             book_code = book_data["id"]
             book_title = book_data.get("title", "")
             full_title = book_data.get("full_title")
             abbreviation = book_data.get("abbreviation")
             canon = book_data.get("canon", "old_testament")
-            
+
             # Calculate chapter count from chapters array
             chapters = book_data.get("chapters", [])
             chapter_count = len(chapters) if isinstance(chapters, list) else 0
-            
+
             # Calculate sequence using base timestamp + small increment to maintain order
             # Use sort_order * 0.001 to preserve relative order while using timestamp format
             sequence = base_timestamp + (sort_order * 0.001)
-            
+
             # Insert or update book
             await (
                 session.insert(BibleBook)
@@ -154,7 +154,7 @@ async def import_bible_data(bible_id: str, data_dir: str = "bible_data"):
                 )
                 .execute()
             )
-            
+
             # Get the book ID
             book = await (
                 session.select(BibleBook.id)
@@ -164,37 +164,37 @@ async def import_bible_data(bible_id: str, data_dir: str = "bible_data"):
             )
             if book:
                 book_id_map[book_code] = book
-            
+
             sort_order += 1
-        
+
         await session.commit()
         click.echo(f"Imported {len(book_id_map)} books")
-        
+
         # 3. Load and import Bible Verses
         click.echo(f"Loading verses from {passages_db_path}...")
         conn = sqlite3.connect(passages_db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        
+
         # Count total verses
         cursor.execute("SELECT COUNT(*) FROM verses")
         total_verses = cursor.fetchone()[0]
         click.echo(f"Found {total_verses} verses to import...")
-        
+
         # Fetch verses in batches
         batch_size = 1000
         cursor.execute("SELECT bible_id, book_id, chapter, verse, passage_id, data FROM verses ORDER BY book_id, chapter, verse")
-        
+
         imported_count = 0
         batch = []
-        
+
         for row in cursor:
             book_code = row["book_id"]
             book_id = book_id_map.get(book_code)
             if not book_id:
                 logger.warning(f"Book not found for book_code: {book_code}, skipping verse {row['passage_id']}")
                 continue
-            
+
             # Parse verse content from JSON data
             try:
                 verse_data = json.loads(row["data"])
@@ -202,14 +202,14 @@ async def import_bible_data(bible_id: str, data_dir: str = "bible_data"):
             except (json.JSONDecodeError, TypeError):
                 logger.warning(f"Failed to parse verse data for {row['passage_id']}")
                 continue
-            
+
             chapter = int(row["chapter"]) if row["chapter"] else None
             verse = int(row["verse"]) if row["verse"] else None
-            
+
             if chapter is None or verse is None:
                 logger.warning(f"Invalid chapter/verse for {row['passage_id']}")
                 continue
-            
+
             batch.append({
                 "book_id": book_id,
                 "chapter": chapter,
@@ -217,7 +217,7 @@ async def import_bible_data(bible_id: str, data_dir: str = "bible_data"):
                 "passage_id": row["passage_id"],
                 "content": content,
             })
-            
+
             if len(batch) >= batch_size:
                 # Insert batch
                 for verse_data in batch:
@@ -234,12 +234,12 @@ async def import_bible_data(bible_id: str, data_dir: str = "bible_data"):
                         )
                         .execute()
                     )
-                
+
                 await session.commit()
                 imported_count += len(batch)
                 click.echo(f"Imported {imported_count}/{total_verses} verses...")
                 batch = []
-        
+
         # Insert remaining batch
         if batch:
             for verse_data in batch:
@@ -258,11 +258,11 @@ async def import_bible_data(bible_id: str, data_dir: str = "bible_data"):
                 )
             await session.commit()
             imported_count += len(batch)
-        
+
         conn.close()
         click.echo(f"Successfully imported {imported_count} verses")
         click.echo(f"Bible data import completed for {bible_id}")
-        
+
     except Exception as e:
         click.echo(f"Error importing Bible data: {e}", err=True)
         logger.exception(e)

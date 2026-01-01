@@ -3,8 +3,8 @@ decorator for timing functions
 """
 import inspect
 import time
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable
 
 from portal.libs.logger import logger
 
@@ -44,5 +44,4 @@ def timer(func: Callable) -> Callable:
         logger.info(f"Function {func.__name__} executed in {end_time - start_time:.4f} seconds.")
         return result
 
-    wrapper = async_wrapper if inspect.iscoroutinefunction(func) else wrapper
-    return wrapper
+    return async_wrapper if inspect.iscoroutinefunction(func) else wrapper

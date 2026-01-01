@@ -1,7 +1,6 @@
 """
 Authentication and Authorization Configuration
 """
-from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -15,7 +14,7 @@ class AuthConfig(BaseModel):
     - Authorization (Permission checking)
     """
     # Permission configuration
-    permission_codes: Optional[List[str]] = Field(
+    permission_codes: list[str] | None = Field(
         default=None,
         description="List of permission codes required for access. If None, no permission check is performed."
     )
@@ -40,7 +39,7 @@ class AuthConfig(BaseModel):
 
     @field_validator("permission_codes")
     @classmethod
-    def validate_permission_codes(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+    def validate_permission_codes(cls, v: list[str] | None) -> list[str] | None:
         """
         Validate and normalize permission codes
         Removes duplicates while preserving order

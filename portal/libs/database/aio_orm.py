@@ -2,30 +2,33 @@ import asyncio
 import inspect
 import re
 import uuid
-from datetime import datetime, date
+from collections.abc import Callable
+from datetime import date, datetime
 from enum import Enum, StrEnum
-from typing import List, Callable, overload, Tuple, Union, TypeVar, Type, Any, Optional
+from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 import asyncpg
 import sqlalchemy as sa
 from asyncpg import Record
 from asyncpg.transaction import TransactionState
 from pydantic import BaseModel
-from sqlalchemy import String, Numeric, Integer, Float, Boolean, DateTime, Date, ColumnExpressionArgument, Column
+from sqlalchemy import Boolean, Column, ColumnExpressionArgument, Date, DateTime, Float, Integer, Numeric, String
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.dialects.postgresql.dml import Insert as PgInsert
-from sqlalchemy.dialects.postgresql.base import PGCompiler
 from sqlalchemy.orm import Query, aliased
 from sqlalchemy.sql import FromClause
-from sqlalchemy.sql.dml import Update, Delete, Insert
+from sqlalchemy.sql.dml import Delete, Insert, Update
 from sqlalchemy.sql.selectable import ScalarSelect
 
 from portal.config import settings
-from portal.libs.database.aio_pg import PostgresConnection, ConnectionType
+from portal.libs.database.aio_pg import ConnectionType, PostgresConnection
 from portal.libs.database.orm import Base, ModelBase
 from portal.libs.logger import logger
-from portal.libs.shared import Converter, Assert, validator
+from portal.libs.shared import Assert, Converter, validator
+
+if TYPE_CHECKING:
+    from sqlalchemy.dialects.postgresql.base import PGCompiler
 
 dialect = postgresql.dialect()
 
@@ -33,11 +36,12 @@ __all__ = ["ISession", "Session"]
 
 T = TypeVar("T")
 
-TableTypes = Union["Table", Type[sa.Table], Type[Base], Type[ModelBase]]
+TableTypes = type[sa.Table] | type[Base] | type[ModelBase]
 
 
 class FetchMethod(StrEnum):
     """Fetch Method"""
+
     FETCH = "fetch"
     FETCH_VAL = "fetch_val"
     FETCH_ROW = "fetch_row"
@@ -47,41 +51,28 @@ def _format_value(value):
     return Converter.format_value(value)
 
 
-def _format_dict(item: Record, as_model: Type[BaseModel] = None):
+def _format_dict(item: Record, as_model: type[BaseModel] | None = None):
     if item is None:
         return item
     if as_model:
         return as_model.model_validate(dict(item))
-    else:
-        data = {}
-        for name, value in dict(item).items():
-            if isinstance(value, list) or isinstance(value, tuple):
-                data[name] = [Converter.format_value(item) for item in value]
-            else:
-                data[name] = Converter.format_value(value)
-        return data
+    data = {}
+    for name, value in dict(item).items():
+        if isinstance(value, (list, tuple)):
+            data[name] = [Converter.format_value(item) for item in value]
+        else:
+            data[name] = Converter.format_value(value)
+    return data
 
 
-def _format_where(clauses: tuple) -> Union[tuple, ColumnExpressionArgument]:
+def _format_where(clauses: tuple) -> tuple | ColumnExpressionArgument:
     Assert.is_not_null(clauses, "clauses")
     if len(clauses) > 2:
-        raise TypeError(
-            "There are too many where condition parameters, "
-            "please use multiple where for multiple conditions or "
-            "use or_, and_ for splicing"
-        )
-    if len(clauses) == 2:
-        where_clause = condition_clause(clauses[0], clauses[1])
-    else:
-        where_clause = clauses[0]
-    return where_clause
+        raise TypeError("There are too many where condition parameters, please use multiple where for multiple conditions or use or_, and_ for splicing")
+    return condition_clause(clauses[0], clauses[1]) if len(clauses) == 2 else clauses[0]
 
-def _get_order_by(
-    tables: Union[Type, List[Type], None],
-    order_by: str,
-    descending=True,
-    **map_columns
-):
+
+def _get_order_by(tables: type[sa.Table] | list[type[sa.Table]] | None, order_by: str, descending=True, **map_columns):
     """
     获取排序字段
     :param tables:
@@ -89,7 +80,7 @@ def _get_order_by(
     :param descending:
     :return:
     """
-    col: Optional[Column] = None
+    col: Column | None = None
     ordered_items = []
     if not isinstance(tables, list):
         tables = [tables]
@@ -114,10 +105,7 @@ def _get_order_by(
         raise ValueError("Table and map_columns cannot be empty at the same time")
     if col is None and not ordered_items:
         descending = True
-        if hasattr(tables[0], "sequence"):
-            col = getattr(tables[0], "sequence")
-        else:
-            col = getattr(tables[0], "created_at")
+        col = tables[0].sequence if hasattr(tables[0], "sequence") else tables[0].created_at
 
     if col is not None:
         if descending:
@@ -128,9 +116,8 @@ def _get_order_by(
         else:
             ordered_items.append(col)
     if "id" not in ordered_items and hasattr(tables[0], "id"):
-        ordered_items.append(getattr(tables[0], "id"))
+        ordered_items.append(tables[0].id)
     return ordered_items
-
 
 
 class _Insert:
@@ -142,10 +129,9 @@ class _Insert:
         """
         :rtype: _Insert
         """
-        if args and len(args) == 1:
-            if isinstance(args[0], dict):
-                self._insert = self._insert.values(**args[0], **kwargs)
-                return self
+        if args and len(args) == 1 and isinstance(args[0], dict):
+            self._insert = self._insert.values(**args[0], **kwargs)
+            return self
         self._insert = self._insert.values(*args, **kwargs)
         return self
 
@@ -154,28 +140,11 @@ class _Insert:
         return self
 
     def on_conflict_do_nothing(self, constraint=None, index_elements=None, index_where=None):
-        self._insert = self._insert.on_conflict_do_nothing(
-            constraint=constraint,
-            index_elements=index_elements,
-            index_where=index_where
-        )
+        self._insert = self._insert.on_conflict_do_nothing(constraint=constraint, index_elements=index_elements, index_where=index_where)
         return self
 
-    def on_conflict_do_update(
-        self,
-        constraint=None,
-        index_elements=None,
-        index_where=None,
-        set_=None,
-        where=None
-    ):
-        self._insert = self._insert.on_conflict_do_update(
-            constraint=constraint,
-            index_elements=index_elements,
-            index_where=index_where,
-            set_=set_,
-            where=where
-        )
+    def on_conflict_do_update(self, constraint=None, index_elements=None, index_where=None, set_=None, where=None):
+        self._insert = self._insert.on_conflict_do_update(constraint=constraint, index_elements=index_elements, index_where=index_where, set_=set_, where=where)
         return self
 
     async def execute(self):
@@ -195,14 +164,12 @@ class _Update:
         """
         :rtype: _Update
         """
-        pass
 
     @overload
     def where(self, conditional_exp: callable, where_clause):
         """
         :rtype: _Update
         """
-        pass
 
     def where(self, *clauses):
         """
@@ -217,10 +184,9 @@ class _Update:
         """
         :rtype: _Update
         """
-        if args and len(args) == 1:
-            if isinstance(args[0], dict):
-                self._update = self._update.values(**args[0])
-                return self
+        if args and len(args) == 1 and isinstance(args[0], dict):
+            self._update = self._update.values(**args[0])
+            return self
         self._update = self._update.values(*args, **kwargs)
         return self
 
@@ -232,7 +198,7 @@ class _Update:
 
 
 class _Select:
-    def __init__(self, columns, mclass: Type[T], session: "Session"):
+    def __init__(self, columns, mclass: type[T], session: "Session"):
         self._select = Query(columns)
         self._mclass = mclass
         self._session = session  # type:Session
@@ -243,7 +209,6 @@ class _Select:
         """
         :rtype: _Select
         """
-        pass
 
     @overload
     def where(self, conditional_exp, where_clause) -> "_Select":
@@ -252,7 +217,6 @@ class _Select:
         :param where_clause:
         :return:
         """
-        pass
 
     def where(self, *clauses) -> "_Select":
         """
@@ -263,24 +227,14 @@ class _Select:
             self._select = self._select.filter(where_clause)
         return self
 
-    def join(
-        self,
-        right: Union[FromClause, sa.Table],
-        onclause: Optional[FromClause] = None,
-        full: bool = False
-    ):
+    def join(self, right: FromClause | sa.Table, onclause: FromClause | None = None, full: bool = False):
         if onclause is None:
             self._select = self._select.join(right, full=full)
         else:
             self._select = self._select.join(right, onclause, full=full)
         return self
 
-    def outerjoin(
-        self,
-        right: Union[FromClause, sa.Table],
-        onclause: Optional[FromClause] = None,
-        full: bool = False
-    ):
+    def outerjoin(self, right: FromClause | sa.Table, onclause: FromClause | None = None, full: bool = False):
         """
         :param right:
         :param onclause:
@@ -293,13 +247,7 @@ class _Select:
             self._select = self._select.outerjoin(right, onclause, full=full)
         return self
 
-    def dynamic_join(
-        self,
-        condition: Union[Callable, bool],
-        right: Union[FromClause, sa.Table],
-        onclause: Optional[FromClause] = None,
-        full: bool = False
-    ):
+    def dynamic_join(self, condition: Callable | bool, right: FromClause | sa.Table, onclause: FromClause | None = None, full: bool = False):
         """
         :param full:
         :param onclause:
@@ -315,13 +263,7 @@ class _Select:
                 return self
         return self.join(right, onclause, full=full)
 
-    def dynamic_outerjoin(
-        self,
-        condition: Union[Callable, bool],
-        right: Union[FromClause, sa.Table],
-        onclause: Optional[FromClause] = None,
-        full: bool = False
-    ):
+    def dynamic_outerjoin(self, condition: Callable | bool, right: FromClause | sa.Table, onclause: FromClause | None = None, full: bool = False):
         """
         :param condition:
         :param right:
@@ -349,7 +291,6 @@ class _Select:
         """
         :rtype: _Select
         """
-        pass
 
     def order_by(self, *clauses):
         """
@@ -361,10 +302,7 @@ class _Select:
             return self
         if len(clauses) > 2:
             raise TypeError("Too many order_by parameters")
-        if len(clauses) == 2 and callable(clauses[1]):
-            order_clause = condition_clause(clauses[0], clauses[1])
-        else:
-            order_clause = clauses[0]
+        order_clause = condition_clause(clauses[0], clauses[1]) if len(clauses) == 2 and callable(clauses[1]) else clauses[0]
         if order_clause is None:
             return self
         if isinstance(order_clause, list):
@@ -373,7 +311,7 @@ class _Select:
             self._select = self._select.order_by(order_clause)
         return self
 
-    def order_by_with(self, tables: Union[Type[sa.Table], List[Type[sa.Table]], None], order_by: str, descending=True, **map_columns):
+    def order_by_with(self, tables: type[sa.Table] | list[type[sa.Table]] | None, order_by: str, descending=True, **map_columns):
         """
 
         :param tables:
@@ -431,7 +369,7 @@ class _Select:
         self._select = self._select.limit(limit)
         return self
 
-    def subquery(self, name: str = None, with_labels=False, reduce_columns=False):
+    def subquery(self, name: str | None = None, with_labels=False, reduce_columns=False):
         """
         :rtype:subquery
         """
@@ -443,16 +381,16 @@ class _Select:
         """
         return self._select.scalar_subquery()
 
-    def cte(self, name: str = None, recursive=False):
+    def cte(self, name: str | None = None, recursive=False):
         """
         :rtype:_Select
         """
         return self._select.cte(name, recursive=recursive)
 
-    async def fetch(self, as_model: Type[BaseModel] = None) -> List[T]:
+    async def fetch(self, as_model: type[BaseModel] | None = None) -> list[T]:
         return await self._session.fetch(self._select.statement, as_model=as_model)
 
-    async def fetchgroup(self, groupby: str, as_model: Type[BaseModel] = None):
+    async def fetchgroup(self, groupby: str, as_model: type[BaseModel] | None = None):
         """
         :param as_model:
         :param groupby:
@@ -460,7 +398,7 @@ class _Select:
         """
         return await self._session.fetchgroup(self._select.statement, groupby=groupby, as_model=as_model)
 
-    async def fetchpages(self, no_order_by: bool = True, as_model: Type[BaseModel] = None) -> Tuple[List[T], int]:
+    async def fetchpages(self, no_order_by: bool = True, as_model: type[BaseModel] | None = None) -> tuple[list[T], int]:
         """
         :param as_model:
         :param no_order_by:
@@ -476,7 +414,7 @@ class _Select:
         data = await self._session.fetch(self._select.statement, as_model=as_model)
         return data, count
 
-    async def fetchdict(self, key: str, value: str = None, as_model: Type[BaseModel] = None) -> dict:
+    async def fetchdict(self, key: str, value: str | None = None, as_model: type[BaseModel] | None = None) -> dict:
         """
         :param key:
         :param value:
@@ -491,7 +429,7 @@ class _Select:
         """
         return await self._session.fetchval(self._select.statement)
 
-    async def fetchrow(self, as_model: Type[BaseModel] = None) -> T:
+    async def fetchrow(self, as_model: type[BaseModel] | None = None) -> T:
         return await self._session.fetchrow(self._select.statement, as_model=as_model)
 
     async def fetchvals(self):
@@ -516,14 +454,12 @@ class _Delete:
         """
         :rtype: _Delete
         """
-        pass
 
     @overload
     def where(self, conditional_exp, where_clause):
         """
         :rtype: _Delete
         """
-        pass
 
     def where(self, *clauses):
         where_clause = _format_where(clauses)
@@ -540,18 +476,18 @@ class _Delete:
 
 def convert_literal_value(value):
     if value is None:
-        return 'null'
+        return "null"
     if isinstance(value, Enum):
         value = value.value
     if isinstance(value, datetime):
         return f"""'{value.isoformat()}'"""
-    elif isinstance(value, date):
+    if isinstance(value, date):
         return f"""'{value.strftime("%Y-%m-%d")}'"""
-    elif isinstance(value, int) or isinstance(value, float):
+    if isinstance(value, (int, float)):
         return str(value)
-    elif isinstance(value, bool):
-        return 'true' if value else 'false'
-    elif isinstance(value, uuid.UUID):
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, uuid.UUID):
         return f"""'{value.hex}'"""
     return f"""'{value}'"""
 
@@ -561,7 +497,7 @@ def exec_default(default):
         return None
     if default.is_sequence:
         raise NotImplementedError()
-    elif default.is_callable:
+    if default.is_callable:
         return default.arg(None)
     return default.arg
 
@@ -593,57 +529,37 @@ def validate(columns: dict, data: dict, is_update: bool = False, is_insert: bool
             value = value.value
         if isinstance(column.type, Integer):
             if not validator.is_int(value):
-                errors.append(
-                    f"The format of the field '{column.name}' is invalid, "
-                    f"the value '{value}' must be an integer"
-                )
+                errors.append(f"The format of the field '{column.name}' is invalid, the value '{value}' must be an integer")
             else:
                 data[column.name] = Converter.to_int(value)
-        elif isinstance(column.type, Numeric) or isinstance(column.type, Float):
+        elif isinstance(column.type, (Numeric, Float)):
             if not validator.is_number(value):
-                errors.append(
-                    f"The format of the field '{column.name}' is invalid, "
-                    f"the value '{value}' must be a number"
-                )
+                errors.append(f"The format of the field '{column.name}' is invalid, the value '{value}' must be a number")
             else:
                 data[column.name] = Converter.to_float(value)
         elif isinstance(column.type, Boolean):
             if not validator.is_bool(value):
-                errors.append(
-                    f"The format of the field '{column.name}' is invalid, "
-                    f"the value '{value}' must be a boolean"
-                )
+                errors.append(f"The format of the field '{column.name}' is invalid, the value '{value}' must be a boolean")
             else:
                 data[column.name] = Converter.to_bool(value)
         elif isinstance(column.type, DateTime):
             if not validator.is_datetime(value):
-                errors.append(
-                    f"The format of the field '{column.name}' is invalid, "
-                    f"the value '{value}' must be a date format yyyy-MM-dd HH:mm:ss"
-                )
+                errors.append(f"The format of the field '{column.name}' is invalid, the value '{value}' must be a date format yyyy-MM-dd HH:mm:ss")
             else:
                 data[column.name] = Converter.to_datetime(value)
         elif isinstance(column.type, Date):
             if not validator.is_date(value):
-                errors.append(
-                    f"The format of the field '{column.name}' is invalid, "
-                    f"the value '{value}' must be in the date format yyyy-MM-dd"
-                )
+                errors.append(f"The format of the field '{column.name}' is invalid, the value '{value}' must be in the date format yyyy-MM-dd")
             else:
                 data[column.name] = Converter.to_date(value)
         elif isinstance(column.type, UUID):
             if not validator.is_uuid(value):
-                errors.append(
-                    f"The format of the field '{column.name}' is invalid, "
-                    f"the value '{value}' must be a UUID"
-                )
+                errors.append(f"The format of the field '{column.name}' is invalid, the value '{value}' must be a UUID")
         elif isinstance(column.type, String):
             s_value = str(value)
             if column.type and column.type.length and len(s_value) > column.type.length:
                 errors.append(
-                    f"The format of the field '{column.name}' is invalid, "
-                    f"the value '{value}' must be less than or equal "
-                    f"to {column.type.length} characters"
+                    f"The format of the field '{column.name}' is invalid, the value '{value}' must be less than or equal to {column.type.length} characters"
                 )
             data[column.name] = s_value
     if errors:
@@ -673,19 +589,19 @@ class ISession:
 class Session(ISession):
     def __init__(
         self,
-        timeout: float = None,
-        echo: bool = None,
-        loop: asyncio.AbstractEventLoop = None,
-        use_poll: bool = None,
-        postgres_connection: PostgresConnection = None
+        timeout: float | None = None,
+        echo: bool | None = None,
+        loop: asyncio.AbstractEventLoop | None = None,
+        use_poll: bool | None = None,
+        postgres_connection: PostgresConnection = None,
     ):
         if use_poll is None:
             self._use_pool = settings.DATABASE_POOL
         else:
             self._use_pool = use_poll
-        self._tx: Optional[asyncpg.connection.transaction.Transaction] = None
-        self._pool: Optional[asyncpg.pool.Pool] = None
-        self._conn: Optional[asyncpg.connection.Connection] = None
+        self._tx: asyncpg.connection.transaction.Transaction | None = None
+        self._pool: asyncpg.pool.Pool | None = None
+        self._conn: asyncpg.connection.Connection | None = None
         self._timeout = timeout
         if echo is None:
             echo = settings.SQL_ECHO
@@ -723,18 +639,13 @@ class Session(ISession):
             # logger.debug(f"use poll:{self._use_pool}")
             if self._use_pool:
                 if self._pool is None:
-                    self._pool = await self._postgres_connection.create_connection(
-                        connection_type=ConnectionType.POOL,
-                        command_timeout=self._timeout
-                    )
+                    self._pool = await self._postgres_connection.create_connection(connection_type=ConnectionType.POOL, command_timeout=self._timeout)
                 if self._conn is None or self._conn.is_closed():
                     self._conn = await self._pool.acquire(timeout=60)
             else:
                 if self._conn is None or self._conn.is_closed():
                     self._conn = await self._postgres_connection.create_connection(
-                        connection_type=ConnectionType.DEFAULT,
-                        command_timeout=self._timeout,
-                        loop=self._loop
+                        connection_type=ConnectionType.DEFAULT, command_timeout=self._timeout, loop=self._loop
                     )
             self._is_closed = False
         except asyncpg.InterfaceError as e:
@@ -743,9 +654,7 @@ class Session(ISession):
             self._retry_count += 1
             if self._retry_count > 1800:
                 raise e
-            logger.debug(
-                f"Reconnect after 1 second after the database connection is disconnected ({e})"
-            )
+            logger.debug(f"Reconnect after 1 second after the database connection is disconnected ({e})")
             await asyncio.sleep(1)
             await self._ensure_connection(False)
         except Exception as e:
@@ -754,17 +663,14 @@ class Session(ISession):
         else:
             lock and self._locker.release()
 
-    def _format_statement(self, statement: Union[str, Any], append_statement: str = None, *params):
+    def _format_statement(self, statement: str | Any, append_statement: str | None = None, *params):
         if isinstance(statement, str):
             sql = statement
             raw_sql = sql
             if self._echo and params:
                 index = 1
                 for p in params:
-                    raw_sql = re.sub(
-                        fr"\${index}(\D:?)", fr"{convert_literal_value(p)}\g<1>",
-                        raw_sql
-                    )
+                    raw_sql = re.sub(rf"\${index}(\D:?)", rf"{convert_literal_value(p)}\g<1>", raw_sql)
                     index += 1
         else:
             result: PGCompiler = statement.compile(dialect=postgresql.dialect(), compile_kwargs={"render_postcompile": True})
@@ -777,12 +683,7 @@ class Session(ISession):
             if result.params:
                 data = result.params.copy()
                 if is_update or is_insert:
-                    validate(
-                        columns=statement.table.columns,
-                        data=data,
-                        is_update=is_update,
-                        is_insert=is_insert
-                    )
+                    validate(columns=statement.table.columns, data=data, is_update=is_update, is_insert=is_insert)
                 for name, value in data.items():
                     sql = sql.replace(f"%({name})s", f"${index}")
                     if self._echo:
@@ -798,13 +699,7 @@ class Session(ISession):
             logger.debug(str.rjust("", 100, "-"))
         return sql, params
 
-    async def execute(
-        self,
-        statement,
-        *params,
-        append_statement: str = None,
-        timeout: float = None
-    ):
+    async def execute(self, statement, *params, append_statement: str | None = None, timeout: float | None = None):
         try:
             await self._locker.acquire()
             await self._ensure_connection(False)
@@ -826,7 +721,7 @@ class Session(ISession):
     def update(self, table: TableTypes) -> _Update:
         return _Update(sa.update(table), self)
 
-    def select(self, *columns: Union[sa.Column, TableTypes, Callable], table: TableTypes = None):
+    def select(self, *columns: sa.Column | TableTypes | Callable, table: TableTypes = None):
         filtered_columns = []
         for column in columns:
             if column is None or column is False:
@@ -843,13 +738,7 @@ class Session(ISession):
                 filtered_columns.append(column)
         return _Select(filtered_columns, table, self)
 
-    async def fetch(
-        self,
-        statement,
-        *params,
-        timeout: float = None,
-        as_model: Type[BaseModel] = None
-    ) -> List[T]:
+    async def fetch(self, statement, *params, timeout: float | None = None, as_model: type[BaseModel] | None = None) -> list[T]:
         """
         :param statement:
         :param params:
@@ -859,14 +748,7 @@ class Session(ISession):
         """
         return await self._fetch(FetchMethod.FETCH, statement, params, timeout=timeout, as_model=as_model)
 
-    async def fetchgroup(
-        self,
-        statement,
-        *params,
-        timeout: float = None,
-        groupby: str,
-        as_model: Type[BaseModel] = None
-    ):
+    async def fetchgroup(self, statement, *params, timeout: float | None = None, groupby: str, as_model: type[BaseModel] | None = None):
         """
 
         :param statement:
@@ -877,15 +759,16 @@ class Session(ISession):
         :return:
         """
         import itertools
+
         items = await self.fetch(statement, *params, timeout=timeout, as_model=as_model)
         if as_model:
             return itertools.groupby(items, key=lambda item: getattr(item, groupby))
         return itertools.groupby(items, key=lambda item: item[groupby])
 
-    async def fetchrow(self, statement, *params, timeout: float = None, as_model: Type[BaseModel] = None):
+    async def fetchrow(self, statement, *params, timeout: float | None = None, as_model: type[BaseModel] | None = None):
         return await self._fetch(FetchMethod.FETCH_ROW, statement, params, timeout=timeout, as_model=as_model)
 
-    async def fetchval(self, statement: Union[str, Any], *params, timeout: float = None):
+    async def fetchval(self, statement: str | Any, *params, timeout: float | None = None):
         """
         :param statement:
         :param params:
@@ -894,20 +777,14 @@ class Session(ISession):
         """
         return await self._fetch(FetchMethod.FETCH_VAL, statement, params, timeout=timeout)
 
-    async def fetchvals(self, statement, *params, timeout: float = None):
+    async def fetchvals(self, statement, *params, timeout: float | None = None):
         sql, params = self._format_statement(statement, None, *params)
         await self._ensure_connection()
         rows = await self._conn.fetch(sql, *params, timeout=timeout)
         return [_format_value(item[0]) for item in rows]
 
     async def fetchdict(
-        self,
-        statement,
-        *params,
-        timeout: float = None,
-        key: str,
-        value: str = None,
-        as_model: Type[BaseModel] = None
+        self, statement, *params, timeout: float | None = None, key: str, value: str | None = None, as_model: type[BaseModel] | None = None
     ) -> dict:
         Assert.is_not_null(key, "key")
         items = await self.fetch(statement, *params, timeout=timeout, as_model=as_model)
@@ -915,29 +792,17 @@ class Session(ISession):
         if not items:
             return results
         for item in items:
-            if as_model:
-                _key = getattr(item, key)
-            else:
-                _key = item.get(key, None)
+            _key = getattr(item, key) if as_model else item.get(key, None)
             if value is None:
                 results[_key] = item
             else:
-                if as_model:
-                    _value = getattr(item, value)
-                else:
-                    _value = item.get(value, None)
+                _value = getattr(item, value) if as_model else item.get(value, None)
                 results[_key] = _value
         return results
 
     async def _fetch(
-        self,
-        method: FetchMethod,
-        statement,
-        params,
-        append_statement: str = None,
-        timeout: float = None,
-        as_model: Type[BaseModel] = None
-    ) -> Union[List[T], T, dict, str, int]:
+        self, method: FetchMethod, statement, params, append_statement: str | None = None, timeout: float | None = None, as_model: type[BaseModel] | None = None
+    ) -> list[T] | T | dict | str | int:
         try:
             await self._locker.acquire()
             sql, params = self._format_statement(statement, append_statement, *params)
@@ -960,14 +825,7 @@ class Session(ISession):
         finally:
             self._locker.release()
 
-    async def copy_records_to_table(
-        self,
-        table_name: str, *,
-        records,
-        columns=None,
-        schema_name: str = None,
-        timeout: int = None
-    ):
+    async def copy_records_to_table(self, table_name: str, *, records, columns=None, schema_name: str | None = None, timeout: int | None = None):
         """
         :param table_name:
         :param records:
@@ -977,13 +835,7 @@ class Session(ISession):
         :return:
         """
         await self._ensure_connection()
-        return await self._conn.copy_records_to_table(
-            table_name,
-            records=records,
-            columns=columns,
-            schema_name=schema_name,
-            timeout=timeout
-        )
+        return await self._conn.copy_records_to_table(table_name, records=records, columns=columns, schema_name=schema_name, timeout=timeout)
 
     async def commit(self):
         async with self._locker:
@@ -996,10 +848,9 @@ class Session(ISession):
     async def rollback(self, lock: bool = True):
         lock and await self._locker.acquire()
         try:
-            if self._tx is not None:
-                if self._tx._state == TransactionState.STARTED:  # noqa
-                    await self._tx.rollback()
-                    self._tx = None
+            if self._tx is not None and self._tx._state == TransactionState.STARTED:  # noqa
+                await self._tx.rollback()
+                self._tx = None
         finally:
             lock and self._locker.release()
 

@@ -4,8 +4,8 @@ Logger
 import logging
 
 from portal.config import settings
-from .generator import LoggerGenerator
 
+from .generator import LoggerGenerator
 
 __all__ = [
     "logger"

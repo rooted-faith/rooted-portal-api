@@ -1,4 +1,5 @@
 """SMTP client"""
+
 import asyncio
 import logging
 import mimetypes
@@ -6,14 +7,16 @@ import smtplib
 import ssl
 import sys
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
+from typing import Any
 
 import aiosmtplib
+
 from portal.config import settings
 
 request_logger = logging.getLogger("smtp_client")
@@ -21,7 +24,7 @@ handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(
     logging.Formatter(
         fmt="[%(asctime)s] %(name)s %(levelname)-8s %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%S%z"
+        datefmt="%Y-%m-%dT%H:%M:%S%z",
     )
 )
 request_logger.addHandler(handler)
@@ -31,13 +34,14 @@ request_logger.setLevel(logging.DEBUG)
 @dataclass
 class SmtpDefaults:
     """SmtpDefaults"""
+
     host: str = None
     port: int = 587
     username: str = None
     password: str = None
     from_email: str = None
     use_tls: bool = True
-    use_ssl: Optional[bool] = None
+    use_ssl: bool | None = None
     timeout: int = 30
     retry_interval: int = 5
     verbose: bool = None
@@ -46,28 +50,31 @@ class SmtpDefaults:
 @dataclass
 class SmtpOptions:
     """SmtpOptions"""
+
     # pylint: disable=too-many-instance-attributes
-    to: Optional[Union[str, List[str]]] = None
-    cc: Optional[Union[str, List[str]]] = None
-    bcc: Optional[Union[str, List[str]]] = None
+    to: str | list[str] | None = None
+    cc: str | list[str] | None = None
+    bcc: str | list[str] | None = None
     subject: str = None
-    text: Optional[str] = None
-    html: Optional[str] = None
-    from_email: Optional[str] = None
-    reply_to: Optional[str] = None
-    attachments: Optional[List[Union[str, Path]]] = None
-    verbose: Optional[bool] = None
-    timeout: Optional[int] = None
-    max_retries: Optional[int] = None
-    retry_interval: Optional[int] = None
-    use_tls: Optional[bool] = None
-    use_ssl: Optional[bool] = None
+    text: str | None = None
+    html: str | None = None
+    from_email: str | None = None
+    reply_to: str | None = None
+    attachments: list[str | Path] | None = None
+    verbose: bool | None = None
+    timeout: int | None = None
+    max_retries: int | None = None
+    retry_interval: int | None = None
+    use_tls: bool | None = None
+    use_ssl: bool | None = None
 
 
 class SmtpResponse:
     """SmtpResponse"""
 
-    def __init__(self, message_id: Optional[str] = None, recipients: Optional[List[str]] = None):
+    def __init__(
+        self, message_id: str | None = None, recipients: list[str] | None = None
+    ):
         self.message_id = message_id
         self.recipients = recipients or []
         self.success = message_id is not None
@@ -76,17 +83,15 @@ class SmtpResponse:
         return self.success
 
     def __repr__(self):
-        return f"SmtpResponse(success={self.success}, recipients={len(self.recipients)})"
+        return (
+            f"SmtpResponse(success={self.success}, recipients={len(self.recipients)})"
+        )
 
 
 class SmtpSession:
     """SmtpSession"""
 
-    def __init__(
-        self,
-        defaults: SmtpDefaults = None,
-        options: SmtpOptions = None
-    ):
+    def __init__(self, defaults: SmtpDefaults = None, options: SmtpOptions = None):
         self._options = options or SmtpOptions()
         self.defaults: SmtpDefaults = defaults
         self._st = time.time()
@@ -112,7 +117,7 @@ class SmtpSession:
         self._options.timeout = timeout
         return self
 
-    def add_to(self, recipients: Union[str, list[str]]):
+    def add_to(self, recipients: str | list[str]):
         """add_to"""
         if not recipients:
             return self
@@ -124,7 +129,7 @@ class SmtpSession:
         self._options.to = list(set(self._options.to))
         return self
 
-    def add_cc(self, recipients: Union[str, list[str]]):
+    def add_cc(self, recipients: str | list[str]):
         """add_cc"""
         if not recipients:
             return self
@@ -136,7 +141,7 @@ class SmtpSession:
         self._options.cc = list(set(self._options.cc))
         return self
 
-    def add_bcc(self, recipients: Union[str, list[str]]):
+    def add_bcc(self, recipients: str | list[str]):
         """add_bcc"""
         if not recipients:
             return self
@@ -173,7 +178,7 @@ class SmtpSession:
         self._options.reply_to = reply_to
         return self
 
-    def attach(self, file_path: Union[str, Path]):
+    def attach(self, file_path: str | Path):
         """attach"""
         if not file_path:
             return self
@@ -184,7 +189,7 @@ class SmtpSession:
             self._options.attachments.append(path)
         return self
 
-    def attach_multiple(self, file_paths: Iterable[Union[str, Path]]):
+    def attach_multiple(self, file_paths: Iterable[str | Path]):
         """attach_multiple"""
         if not file_paths:
             return self
@@ -212,7 +217,7 @@ class SmtpSession:
         elif callable(message):
             request_logger.info(message(), *args)
 
-    def _normalize_recipients(self, recipients: Optional[Union[str, List[str]]]) -> List[str]:
+    def _normalize_recipients(self, recipients: str | list[str] | None) -> list[str]:
         if not recipients:
             return []
         if isinstance(recipients, str):
@@ -225,7 +230,9 @@ class SmtpSession:
         bcc_list = self._normalize_recipients(self._options.bcc)
 
         if not to_list and not cc_list and not bcc_list:
-            raise ValueError("At least one recipient (to, cc, or bcc) must be specified")
+            raise ValueError(
+                "At least one recipient (to, cc, or bcc) must be specified"
+            )
 
         if not self._options.subject:
             raise ValueError("Subject must be specified")
@@ -240,11 +247,7 @@ class SmtpSession:
         has_attachments = bool(self._options.attachments)
         has_both_text_html = bool(self._options.text and self._options.html)
 
-        if has_both_text_html:
-            msg = MIMEMultipart("alternative")
-        else:
-            msg = MIMEMultipart()
-
+        msg: MIMEMultipart = MIMEMultipart("alternative") if has_both_text_html else MIMEMultipart()
         msg["From"] = from_email
         if to_list:
             msg["To"] = ", ".join(to_list)
@@ -305,18 +308,18 @@ class SmtpSession:
 
                 # Encode the attachment
                 from email import encoders
+
                 encoders.encode_base64(attachment)
 
                 # Add header
                 attachment.add_header(
-                    "Content-Disposition",
-                    f'attachment; filename="{path_obj.name}"'
+                    "Content-Disposition", f'attachment; filename="{path_obj.name}"'
                 )
                 msg.attach(attachment)
 
         return msg
 
-    def _get_smtp_config(self) -> Dict[str, Any]:
+    def _get_smtp_config(self) -> dict[str, Any]:
         return {
             "host": self.defaults.host,
             "port": self.defaults.port,
@@ -344,9 +347,7 @@ class SmtpSession:
         return "plain"
 
     def _send_message(
-        self,
-        message: MIMEMultipart,
-        recipients: List[str]
+        self, message: MIMEMultipart, recipients: list[str]
     ) -> SmtpResponse:
         config = self._get_smtp_config()
         ssl_mode = self._decide_ssl_mode()
@@ -358,19 +359,17 @@ class SmtpSession:
                     config["host"],
                     config["port"],
                     timeout=config["timeout"],
-                    context=context
+                    context=context,
                 ) as server:
                     self._login_if_needed(server)
                     server.send_message(
                         message,
                         from_addr=self._options.from_email or self.defaults.from_email,
-                        to_addrs=recipients
+                        to_addrs=recipients,
                     )
             else:
                 with smtplib.SMTP(
-                    config["host"],
-                    config["port"],
-                    timeout=config["timeout"]
+                    config["host"], config["port"], timeout=config["timeout"]
                 ) as server:
                     server.ehlo()
                     if ssl_mode == "starttls":
@@ -381,7 +380,7 @@ class SmtpSession:
                     server.send_message(
                         message,
                         from_addr=self._options.from_email or self.defaults.from_email,
-                        to_addrs=recipients
+                        to_addrs=recipients,
                     )
 
             message_id = message.get("Message-ID", "")
@@ -407,9 +406,7 @@ class SmtpSession:
             self._log_verbose("SMTP login skipped (no username/password provided)")
 
     async def _asend_message(
-        self,
-        message: MIMEMultipart,
-        recipients: List[str]
+        self, message: MIMEMultipart, recipients: list[str]
     ) -> SmtpResponse:
         config = self._get_smtp_config()
         ssl_mode = self._decide_ssl_mode()
@@ -424,13 +421,11 @@ class SmtpSession:
                     port=config["port"],
                     timeout=config["timeout"],
                     use_tls=True,
-                    tls_context=context
+                    tls_context=context,
                 ) as server:
                     await self._alogin_if_needed(server)
                     await server.send_message(
-                        message,
-                        sender=sender,
-                        recipients=recipients
+                        message, sender=sender, recipients=recipients
                     )
             elif ssl_mode == "starttls":
                 # STARTTLS mode: connect without TLS, then upgrade (port 587/25)
@@ -440,13 +435,11 @@ class SmtpSession:
                     port=config["port"],
                     timeout=config["timeout"],
                     use_tls=False,
-                    tls_context=context
+                    tls_context=context,
                 ) as server:
                     await self._alogin_if_needed(server)
                     await server.send_message(
-                        message,
-                        sender=sender,
-                        recipients=recipients
+                        message, sender=sender, recipients=recipients
                     )
             else:
                 # Plain mode: no encryption
@@ -454,13 +447,11 @@ class SmtpSession:
                     hostname=config["host"],
                     port=config["port"],
                     timeout=config["timeout"],
-                    use_tls=False
+                    use_tls=False,
                 ) as server:
                     await self._alogin_if_needed(server)
                     await server.send_message(
-                        message,
-                        sender=sender,
-                        recipients=recipients
+                        message, sender=sender, recipients=recipients
                     )
 
             message_id = message.get("Message-ID", "")
@@ -469,42 +460,30 @@ class SmtpSession:
             request_logger.error(f"SMTP send failed: {exc}")
             raise
 
-    def _format_log_message(self, recipients: List[str]) -> str:
+    def _format_log_message(self, recipients: list[str]) -> str:
         esp = time.time() - self._st
         return f"Email sent to {len(recipients)} recipients ({round(esp * 1000)}ms)"
 
     def _format_response(
-        self,
-        response: SmtpResponse,
-        retry_count: int,
-        is_last_time: bool
+        self, response: SmtpResponse, retry_count: int, is_last_time: bool
     ):
         if not response.success:
             if not is_last_time:
                 request_logger.debug(
-                    f'SMTP send failed, ready to retry {retry_count + 1} times'
+                    f"SMTP send failed, ready to retry {retry_count + 1} times"
                 )
                 return None
-            request_logger.debug('SMTP send failed after all retries')
+            request_logger.debug("SMTP send failed after all retries")
         self._log_verbose(lambda: self._format_log_message(response.recipients))
         return response
 
     def _retry_error_debug_log(
-        self,
-        is_last_time: bool,
-        exception: Exception,
-        retry_count: int
+        self, is_last_time: bool, exception: Exception, retry_count: int
     ):
         if not is_last_time:
-            request_logger.debug(
-                f'SMTP send error: {str(exception)} '
-                f'Ready to retry {retry_count + 1} times'
-            )
+            request_logger.debug(f"SMTP send error: {exception!s} Ready to retry {retry_count + 1} times")
         else:
-            request_logger.debug(
-                f'SMTP send error: {str(exception)} '
-                f'Maximum number of retries reached'
-            )
+            request_logger.debug(f"SMTP send error: {exception!s} Maximum number of retries reached")
 
     def send(self) -> SmtpResponse:
         """send"""
@@ -517,9 +496,11 @@ class SmtpSession:
         self._log_verbose(
             lambda: f'Sending email to {len(recipients)} recipients: {", ".join(recipients)}'
         )
-        self._log_verbose(lambda: f'Subject: {self._options.subject}')
+        self._log_verbose(lambda: f"Subject: {self._options.subject}")
 
-        max_retries = 1 if not self._options.max_retries else self._options.max_retries + 1
+        max_retries = (
+            1 if not self._options.max_retries else self._options.max_retries + 1
+        )
         for i in range(max_retries):
             is_last_time = (i + 1) == max_retries
             try:
@@ -529,9 +510,7 @@ class SmtpSession:
                         time.sleep(self._options.retry_interval)
                     continue
                 formatted_response = self._format_response(
-                    response,
-                    retry_count=i,
-                    is_last_time=is_last_time
+                    response, retry_count=i, is_last_time=is_last_time
                 )
                 if not formatted_response:
                     continue
@@ -543,18 +522,18 @@ class SmtpSession:
                 smtplib.SMTPAuthenticationError,
                 ConnectionRefusedError,
                 TimeoutError,
-                OSError
+                OSError,
             ) as exc:
                 if is_last_time:
                     raise exc
                 if self._options.retry_interval is not None:
                     time.sleep(self._options.retry_interval)
                 self._retry_error_debug_log(
-                    is_last_time=is_last_time,
-                    exception=exc,
-                    retry_count=i
+                    is_last_time=is_last_time, exception=exc, retry_count=i
                 )
                 continue
+
+        raise RuntimeError("SMTP send failed after all retries")
 
     async def asend(self) -> SmtpResponse:
         """asend"""
@@ -567,9 +546,11 @@ class SmtpSession:
         self._log_verbose(
             lambda: f'Sending email to {len(recipients)} recipients: {", ".join(recipients)}'
         )
-        self._log_verbose(lambda: f'Subject: {self._options.subject}')
+        self._log_verbose(lambda: f"Subject: {self._options.subject}")
 
-        max_retries = 1 if not self._options.max_retries else self._options.max_retries + 1
+        max_retries = (
+            1 if not self._options.max_retries else self._options.max_retries + 1
+        )
         for i in range(max_retries):
             is_last_time = (i + 1) == max_retries
             try:
@@ -579,9 +560,7 @@ class SmtpSession:
                         await asyncio.sleep(self._options.retry_interval)
                     continue
                 formatted_response = self._format_response(
-                    response,
-                    retry_count=i,
-                    is_last_time=is_last_time
+                    response, retry_count=i, is_last_time=is_last_time
                 )
                 if not formatted_response:
                     continue
@@ -593,18 +572,18 @@ class SmtpSession:
                 aiosmtplib.SMTPException,
                 aiosmtplib.SMTPServerDisconnected,
                 aiosmtplib.SMTPConnectError,
-                aiosmtplib.SMTPAuthenticationError
+                aiosmtplib.SMTPAuthenticationError,
             ) as exc:
                 if is_last_time:
                     raise exc
                 if self._options.retry_interval is not None:
                     await asyncio.sleep(self._options.retry_interval)
                 self._retry_error_debug_log(
-                    is_last_time=is_last_time,
-                    exception=exc,
-                    retry_count=i
+                    is_last_time=is_last_time, exception=exc, retry_count=i
                 )
                 continue
+
+        raise RuntimeError("SMTP send failed after all retries")
 
 
 # pylint: disable=too-few-public-methods
@@ -620,7 +599,7 @@ class SmtpClient:
                 password=settings.SMTP_PASSWORD,
                 from_email=settings.SMTP_FROM_EMAIL,
                 use_tls=True,
-                verbose=settings.is_dev
+                verbose=settings.is_dev,
             )
         self.defaults: SmtpDefaults = defaults
 
@@ -632,4 +611,3 @@ class SmtpClient:
 
 
 smtp_client = SmtpClient()
-

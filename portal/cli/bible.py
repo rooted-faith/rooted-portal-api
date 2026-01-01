@@ -6,7 +6,7 @@ import json
 import os
 import sqlite3
 import time
-from typing import Any, Dict, Optional, List
+from typing import Any
 
 import click
 import httpx
@@ -25,7 +25,7 @@ YVP_AUTH_HEADER = "X-YVP-App-Key"
 
 def load_json(path: str, default):
     if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     return default
 
@@ -134,14 +134,8 @@ class YouVersionDumper:
             )
         """)
 
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_passage_id ON verses(passage_id)
-        """)
-
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_book_chapter_verse 
-            ON verses(bible_id, book_id, chapter, verse)
-        """)
+        cursor.execute("""CREATE INDEX IF NOT EXISTS idx_passage_id ON verses(passage_id)""")
+        cursor.execute("""CREATE INDEX IF NOT EXISTS idx_book_chapter_verse ON verses(bible_id, book_id, chapter, verse)""")
 
         conn.commit()
         conn.close()
@@ -152,7 +146,7 @@ class YouVersionDumper:
         chapter: Any,
         verse: Any,
         passage_id: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         data: Any,
     ):
         """Insert or replace a verse in the database."""
@@ -200,7 +194,7 @@ class YouVersionDumper:
         self.state["requests_today"] += 1
         self._save_state()
 
-    def _parse_rate_limit_headers(self, response) -> Dict[str, Any]:
+    def _parse_rate_limit_headers(self, response) -> dict[str, Any]:
         """Parse rate limit headers from response."""
         rate_limit_info = {}
         if not hasattr(response, "headers"):
@@ -213,16 +207,16 @@ class YouVersionDumper:
         if limit_header:
             try:
                 rate_limit_info["limit"] = int(limit_header)
-            except (ValueError, TypeError):
-                pass
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Failed to parse X-RateLimit-Limit: {e}")
 
         # X-RateLimit-Remaining: Remaining requests in current window
         remaining_header = headers.get("X-RateLimit-Remaining")
         if remaining_header:
             try:
                 rate_limit_info["remaining"] = int(remaining_header)
-            except (ValueError, TypeError):
-                pass
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Failed to parse X-RateLimit-Remaining: {e}")
 
         # X-RateLimit-Reset: Time when the rate limit resets
         reset_header = headers.get("X-RateLimit-Reset")
@@ -231,7 +225,7 @@ class YouVersionDumper:
 
         return rate_limit_info
 
-    def _get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Any:
+    def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         self._count_request()
         url = f"{BASE_URL}{path}"
 
@@ -255,7 +249,7 @@ class YouVersionDumper:
             httpx.TimeoutException,
             TimeoutError,
         ) as timeout_exc:
-            # http_client retry 後仍然失敗，保存狀態並停止
+            # http_client retry failed, save state and stop execution
             error_msg = (
                 f"請求超時 (Read operation timed out): {url} "
                 f"(已重試 {self.max_retries} 次)"
@@ -271,11 +265,11 @@ class YouVersionDumper:
             )
             self._save_state()
             raise SystemExit(
-                f"{error_msg}。已保存 state，請下次再跑。"
+                f"{error_msg}。已保存 state, 請下次再跑。"
             ) from timeout_exc
 
         except Exception as exc:
-            # 其他異常，記錄並重新拋出
+            # Other exceptions, record and re-raise
             logger.error(
                 "請求發生未預期的錯誤: %s",
                 str(exc),
@@ -330,7 +324,7 @@ class YouVersionDumper:
             )
 
             self._save_state()
-            raise SystemExit(f"{error_message}。已保存 state，請下次再跑。")
+            raise SystemExit(f"{error_message}。已保存 state, 請下次再跑。")
 
         # Handle other errors (4xx, 5xx)
         if response.status_code >= 400:
@@ -361,7 +355,7 @@ class YouVersionDumper:
 
         return response.json()
 
-    def dump_meta(self) -> Dict[str, Any]:
+    def dump_meta(self) -> dict[str, Any]:
         bible = self._get(f"/v1/bibles/{self.bible_id}")
         atomic_write_json(os.path.join(self.meta_dir, "bible.json"), bible)
 
@@ -369,17 +363,17 @@ class YouVersionDumper:
         atomic_write_json(os.path.join(self.meta_dir, "index.json"), index)
         return index
 
-    def _books(self, index_obj: Any) -> List[Dict[str, Any]]:
+    def _books(self, index_obj: Any) -> list[dict[str, Any]]:
         if isinstance(index_obj, dict) and isinstance(index_obj.get("books"), list):
             return index_obj["books"]
-        # 容錯：若包在 data
+        # Tolerance: if wrapped in data
         if isinstance(index_obj, dict) and isinstance(index_obj.get("data"), dict):
             v = index_obj["data"].get("books")
             if isinstance(v, list):
                 return v
         raise ValueError("index 回傳格式找不到 books[]。")
 
-    def dump_passages_by_chapter_from_index(self, index_obj: Dict[str, Any]):
+    def dump_passages_by_chapter_from_index(self, index_obj: dict[str, Any]):
         books = self._books(index_obj)
 
         start_bi = int(self.state.get("last_book_index", 0))
@@ -396,11 +390,11 @@ class YouVersionDumper:
             book = books[bi]
             book_id = book.get("id")  # 例如 GEN
             if not book_id:
-                raise ValueError(f"book 缺少 id：{book}")
+                raise ValueError(f"book 缺少 id: {book}")
 
             chapters = book.get("chapters")
             if not isinstance(chapters, list):
-                raise ValueError(f"book.chapters 不是 list：book_id={book_id}")
+                raise ValueError(f"book.chapters 不是 list: book_id={book_id}")
 
             ci0 = start_ci if bi == start_bi else 0
 
@@ -411,7 +405,7 @@ class YouVersionDumper:
                 verses = ch.get("verses")
                 if not isinstance(verses, list):
                     raise ValueError(
-                        f"chapter.verses 不是 list：book_id={book_id}, chapter={ch_num}"
+                        f"chapter.verses 不是 list: book_id={book_id}, chapter={ch_num}"
                     )
 
                 vi0 = start_vi if (bi == start_bi and ci == start_ci) else 0
@@ -422,7 +416,7 @@ class YouVersionDumper:
                     passage_id = verse.get("passage_id")  # 例如 GEN.1.1
                     if not passage_id:
                         raise ValueError(
-                            f"verse 缺少 passage_id：book_id={book_id}, chapter={ch_num}, verse={verse}"
+                            f"verse 缺少 passage_id: book_id={book_id}, chapter={ch_num}, verse={verse}"
                         )
 
                     data = self._get(
@@ -439,20 +433,20 @@ class YouVersionDumper:
                         data=data,
                     )
 
-                    # 更新斷點：下一節
+                    # Update breakpoint: next chapter
                     self.state["last_book_index"] = bi
                     self.state["last_chapter_index"] = ci
                     self.state["last_verse_index"] = vi + 1
                     self.state["done"] = False
                     self._save_state()
 
-                # 章節完成
+                # Chapter completed
                 self.state["last_book_index"] = bi
                 self.state["last_chapter_index"] = ci + 1
                 self.state["last_verse_index"] = 0
                 self._save_state()
 
-            # 書卷完成
+            # Book completed
             self.state["last_book_index"] = bi + 1
             self.state["last_chapter_index"] = 0
             self.state["last_verse_index"] = 0

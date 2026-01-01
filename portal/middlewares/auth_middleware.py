@@ -8,8 +8,8 @@ Authentication and Authorization Middleware
 # - Permission checking
 # - User context setup
 
-from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import Request
+from starlette.middleware.base import BaseHTTPMiddleware
 
 
 class AuthMiddleware(BaseHTTPMiddleware):

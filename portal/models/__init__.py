@@ -1,10 +1,10 @@
 """
 Models package
 """
-from .bible import BibleVersion, BibleBook, BibleVerse
+from .bible import BibleBook, BibleVerse, BibleVersion
 
 __all__ = [
-    "BibleVersion",
     "BibleBook",
     "BibleVerse",
+    "BibleVersion",
 ]

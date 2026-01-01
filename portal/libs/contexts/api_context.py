@@ -2,7 +2,6 @@
 API Context
 """
 from contextvars import ContextVar, Token
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -16,16 +15,16 @@ class APIContext(BaseModel):
     model_config = {
         "arbitrary_types_allowed": True
     }
-    token: Optional[str] = None
-    token_payload: Optional[TokenPayload] = None
-    uid: Optional[str] = None
-    email: Optional[str] = None
-    username: Optional[str] = None
-    display_name: Optional[str] = None
-    host: Optional[str] = None
-    url: Optional[str] = None
-    path: Optional[str] = None
-    verified: Optional[bool] = False
+    token: str | None = None
+    token_payload: TokenPayload | None = None
+    uid: str | None = None
+    email: str | None = None
+    username: str | None = None
+    display_name: str | None = None
+    host: str | None = None
+    url: str | None = None
+    path: str | None = None
+    verified: bool | None = False
 
 
 def set_api_context(context: APIContext) -> Token:

@@ -2,8 +2,8 @@
 telemetry tracer
 """
 import inspect
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable, Optional
 
 import sentry_sdk
 from sentry_sdk.consts import SPANDATA
@@ -12,9 +12,9 @@ from sentry_sdk.tracing import Span, TransactionSource
 
 def start_transaction(
     *,
-    op: Optional[str] = None,
-    name: Optional[str] = None,
-    source: Optional[TransactionSource] = None
+    op: str | None = None,
+    name: str | None = None,
+    source: TransactionSource | None = None
 ) -> Callable:
     """
     A decorator to instrument a class or function with an open telemetry tracing transaction.
@@ -101,8 +101,8 @@ def start_transaction(
 
 def distributed_trace(
     *,
-    op: str = None,
-    description: str = None,
+    op: str | None = None,
+    description: str | None = None,
     inject_span: bool = False
 ) -> Callable:
     """
@@ -174,10 +174,7 @@ def distributed_trace(
                 ) as span:  # type: Span
                     _set_semantic_attributes(span=span, raw_func=func)
                     try:
-                        if inject_span and _check_func_args_has_span(func):
-                            result = await func(*args, **kwargs, _span=span)
-                        else:
-                            result = await func(*args, **kwargs)
+                        result = await func(*args, **kwargs, _span=span) if inject_span and _check_func_args_has_span(func) else await func(*args, **kwargs)
                     except Exception as exc:
                         span.set_data("Exception", str(exc))
                         raise exc
@@ -198,10 +195,7 @@ def distributed_trace(
                 ) as span:  # type: Span
                     _set_semantic_attributes(span=span, raw_func=func)
                     try:
-                        if inject_span and _check_func_args_has_span(func):
-                            result = func(*args, **kwargs, _span=span)
-                        else:
-                            result = func(*args, **kwargs)
+                        result = func(*args, **kwargs, _span=span) if inject_span and _check_func_args_has_span(func) else func(*args, **kwargs)
                     except Exception as exc:
                         span.set_data("Exception", str(exc))
                         raise exc

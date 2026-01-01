@@ -1,18 +1,24 @@
+"""
+Core Request Middleware
+"""
 import uuid
+from typing import TYPE_CHECKING
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from portal.container import Container
 from portal.libs.contexts.request_context import (
     RequestContext,
-    set_request_context,
     reset_request_context,
+    set_request_context,
 )
 from portal.libs.contexts.request_session_context import (
-    set_request_session,
     reset_request_session,
+    set_request_session,
 )
+
+if TYPE_CHECKING:
+    from portal.container import Container
 
 
 def _resolve_ip(request: Request) -> str | None:

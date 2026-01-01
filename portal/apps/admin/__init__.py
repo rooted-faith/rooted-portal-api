@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from portal.container import Container
 from portal.libs.utils.lifespan import lifespan
+
 from .routers import register_routers
 
 

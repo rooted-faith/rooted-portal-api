@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, date
+from datetime import date, datetime
 
 # integer
 RE_INT = re.compile(r'^-?\d+$')
@@ -32,9 +32,7 @@ def is_email(value):
         return False
     if not isinstance(value, str):
         return False
-    if RE_EMAIL.findall(value):
-        return True
-    return False
+    return bool(RE_EMAIL.findall(value))
 
 
 def is_uuid(value: str):
@@ -45,9 +43,7 @@ def is_uuid(value: str):
         return True
     if not isinstance(value, str):
         return False
-    if RE_UUID.findall(value.replace('-', '')):
-        return True
-    return False
+    return bool(RE_UUID.findall(value.replace('-', '')))
 
 
 def is_bool(value):
@@ -63,13 +59,11 @@ def is_bool(value):
 def is_number(value):
     if value is None:
         return False
-    if isinstance(value, float) or isinstance(value, int):
+    if isinstance(value, (float, int)):
         return True
     if not isinstance(value, str):
         return False
-    if RE_NUMBER.findall(value):
-        return True
-    return False
+    return bool(RE_NUMBER.findall(value))
 
 
 def is_int(value):
@@ -79,9 +73,7 @@ def is_int(value):
         return True
     if not isinstance(value, str):
         return False
-    if RE_INT.findall(value):
-        return True
-    return False
+    return bool(RE_INT.findall(value))
 
 
 def is_url(value):
@@ -89,9 +81,7 @@ def is_url(value):
         return False
     if not isinstance(value, str):
         return False
-    if RE_URL.findall(value):
-        return True
-    return False
+    return bool(RE_URL.findall(value))
 
 
 def is_date(value):
@@ -103,9 +93,7 @@ def is_date(value):
         return True
     if not isinstance(value, str):
         return False
-    if RE_DATE.findall(value):
-        return True
-    return False
+    return bool(RE_DATE.findall(value))
 
 
 def is_datetime(value):
@@ -115,9 +103,7 @@ def is_datetime(value):
         return True
     if not isinstance(value, str):
         return False
-    if RE_DATETIME.findall(value):
-        return True
-    return False
+    return bool(RE_DATETIME.findall(value))
 
 
 def is_datetime_minute(value):
@@ -127,6 +113,4 @@ def is_datetime_minute(value):
         return True
     if not isinstance(value, str):
         return False
-    if RE_DATETIME_MINUTE.findall(value):
-        return True
-    return False
+    return bool(RE_DATETIME_MINUTE.findall(value))

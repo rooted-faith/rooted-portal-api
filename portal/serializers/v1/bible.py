@@ -1,8 +1,8 @@
 """
 Bible serializers
 """
-from typing import Optional
 from uuid import UUID
+
 from pydantic import BaseModel, Field, field_serializer
 
 
@@ -15,7 +15,7 @@ class BibleVersionBase(BaseModel):
     abbreviation: str = Field(..., description="English abbreviation, e.g., 'CCBT'")
     title: str = Field(..., description="English title")
     localized_title: str = Field(..., description="Localized title, e.g., '當代譯本'")
-    localized_abbreviation: Optional[str] = Field(None, description="Localized abbreviation, e.g., 'CCB'")
+    localized_abbreviation: str | None = Field(None, description="Localized abbreviation, e.g., 'CCB'")
     language_tag: str = Field(..., description="Language tag, e.g., 'zh-Hant-TW'")
     is_active: bool = Field(..., description="Is version active")
 
@@ -39,8 +39,8 @@ class BibleBookBase(BaseModel):
     id: UUID = Field(..., description="Book ID (UUID)")
     book_code: str = Field(..., description="Book code, e.g., 'GEN', 'MAT'")
     title: str = Field(..., description="Book title")
-    full_title: Optional[str] = Field(None, description="Full book title")
-    abbreviation: Optional[str] = Field(None, description="Book abbreviation, e.g., '創'")
+    full_title: str | None = Field(None, description="Full book title")
+    abbreviation: str | None = Field(None, description="Book abbreviation, e.g., '創'")
     canon: str = Field(..., description="Canon type: 'old_testament' or 'new_testament'")
     sequence: float = Field(..., description="Display sort order (small to large, standard Bible book order)")
     chapter_count: int = Field(..., description="Number of chapters in this book")
@@ -99,7 +99,7 @@ class BibleSearchResult(BaseModel):
     chapter: int = Field(..., description="Chapter number")
     verse: int = Field(..., description="Verse number")
     content: str = Field(..., description="Verse content")
-    highlight: Optional[str] = Field(None, description="Highlighted search keyword")
+    highlight: str | None = Field(None, description="Highlighted search keyword")
 
     @field_serializer("bible_version_id", "book_id")
     def serialize_uuid(self, value: UUID, _info) -> str:

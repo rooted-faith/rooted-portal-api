@@ -4,9 +4,8 @@ main application
 from collections import defaultdict
 
 import sentry_sdk
-from fastapi import FastAPI, Request, status, HTTPException
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exception_handlers import http_exception_handler
-from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from sentry_sdk.integrations.asyncpg import AsyncPGIntegration
 from sentry_sdk.integrations.fastapi import FastApiIntegration
@@ -17,6 +16,7 @@ from sentry_sdk.tracing import Span
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import RedirectResponse
 
+from portal.apps.admin import create_admin_app
 from portal.config import settings
 from portal.container import Container
 from portal.exceptions.responses import ApiBaseException
@@ -24,9 +24,8 @@ from portal.libs.contexts.request_session_context import get_request_session
 from portal.libs.decorators.sentry_tracer import distributed_trace
 from portal.libs.logger import logger
 from portal.libs.utils.lifespan import lifespan
-from portal.middlewares import CoreRequestMiddleware, AuthMiddleware
+from portal.middlewares import AuthMiddleware, CoreRequestMiddleware
 from portal.routers import api_router
-from portal.apps.admin import create_admin_app
 
 __all__ = ["app"]
 
@@ -118,10 +117,10 @@ def get_application() -> FastAPI:
 
     # Register middleware (applied to all routes and sub-apps)
     register_middleware(application=application)
-    
+
     # Register API routers
     register_router(application=application)
-    
+
     # Mount Admin sub-application
     mount_admin_app(application=application, container=_container)
 

@@ -1,22 +1,21 @@
 """
 Bible API Router
 """
-from typing import Annotated, Optional
+from typing import Annotated
 from uuid import UUID
-from dependency_injector.wiring import inject, Provide
-from fastapi import Query, Depends
+
+from dependency_injector.wiring import Provide, inject
+from fastapi import APIRouter, Depends, Query
 from starlette import status
 
 from portal.container import Container
 from portal.handlers.bible import BibleHandler
 from portal.serializers.v1.bible import (
-    BibleVersionList,
     BibleBookList,
     BibleChapterDetail,
     BibleSearchResponse,
+    BibleVersionList,
 )
-
-from fastapi import APIRouter
 
 router = APIRouter()
 
@@ -31,7 +30,7 @@ router = APIRouter()
 )
 @inject
 async def get_bible_versions(
-    language: Annotated[Optional[str], Query(description="Language filter (e.g., 'zh-TW', 'zh-CN')")] = None,
+    language: Annotated[str | None, Query(description="Language filter (e.g., 'zh-TW', 'zh-CN')")] = None,
     bible_handler: BibleHandler = Depends(Provide[Container.bible_handler]),
 ) -> BibleVersionList:
     """
@@ -103,8 +102,8 @@ async def get_bible_chapter(
 @inject
 async def search_bible_verses(
     q: Annotated[str, Query(description="Search keyword")],
-    bible_version_id: Annotated[Optional[UUID], Query(description="Bible version ID filter (UUID)")] = None,
-    book_id: Annotated[Optional[UUID], Query(description="Book ID filter (UUID)")] = None,
+    bible_version_id: Annotated[UUID | None, Query(description="Bible version ID filter (UUID)")] = None,
+    book_id: Annotated[UUID | None, Query(description="Book ID filter (UUID)")] = None,
     limit: Annotated[int, Query(description="Result limit", ge=1, le=100)] = 20,
     offset: Annotated[int, Query(description="Result offset", ge=0)] = 0,
     bible_handler: BibleHandler = Depends(Provide[Container.bible_handler]),

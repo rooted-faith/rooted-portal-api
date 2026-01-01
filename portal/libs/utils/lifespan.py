@@ -3,10 +3,10 @@ Util functions for lifespan
 """
 from contextlib import asynccontextmanager
 
-from portal.config import settings
 from fastapi import FastAPI
 from fastapi_limiter import FastAPILimiter
 
+from portal.config import settings
 from portal.libs.database import RedisPool
 from portal.libs.logger import logger
 

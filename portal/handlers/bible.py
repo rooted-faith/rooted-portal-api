@@ -1,27 +1,28 @@
 """
 BibleHandler
 """
-from typing import Optional
-from uuid import UUID
 
-import sqlalchemy as sa
-from redis.asyncio import Redis
+from typing import TYPE_CHECKING
+from uuid import UUID
 
 from portal.config import settings
 from portal.exceptions.responses import NotFoundException
-from portal.libs.database import Session, RedisPool
+from portal.libs.database import RedisPool, Session
 from portal.libs.decorators.sentry_tracer import distributed_trace
-from portal.models import BibleVersion, BibleBook, BibleVerse
+from portal.models import BibleBook, BibleVerse, BibleVersion
 from portal.serializers.v1.bible import (
-    BibleVersionBase,
-    BibleVersionList,
     BibleBookBase,
     BibleBookList,
     BibleChapterDetail,
-    BibleVerseBase,
     BibleSearchResponse,
     BibleSearchResult,
+    BibleVerseBase,
+    BibleVersionBase,
+    BibleVersionList,
 )
+
+if TYPE_CHECKING:
+    from redis.asyncio import Redis
 
 
 class BibleHandler:
@@ -36,34 +37,32 @@ class BibleHandler:
         self._redis: Redis = redis_client.create(db=settings.REDIS_DB)
 
     @distributed_trace()
-    async def get_versions(self, language: Optional[str] = None) -> BibleVersionList:
+    async def get_versions(self, language: str | None = None) -> BibleVersionList:
         """
         Get bible versions
         :param language: Optional language filter (e.g., 'zh-TW', 'zh-CN')
         :return:
         """
-        query = (
-            self._session.select(
-                BibleVersion.id,
-                BibleVersion.youversion_bible_id,
-                BibleVersion.abbreviation,
-                BibleVersion.title,
-                BibleVersion.localized_title,
-                BibleVersion.localized_abbreviation,
-                BibleVersion.language_tag,
-                BibleVersion.is_active,
-            )
-            .where(BibleVersion.is_active == True)  # noqa
-        )
-        
-        if language:
-            query = query.where(BibleVersion.language_tag.like(f"{language}%"))
-        
-        versions: list[BibleVersionBase] = await query.order_by(
+        query = self._session.select(
+            BibleVersion.id,
+            BibleVersion.youversion_bible_id,
+            BibleVersion.abbreviation,
+            BibleVersion.title,
+            BibleVersion.localized_title,
+            BibleVersion.localized_abbreviation,
             BibleVersion.language_tag,
-            BibleVersion.youversion_bible_id
+            BibleVersion.is_active,
+        ).where(
+            BibleVersion.is_active.is_(True)
+        )
+
+        if language:
+            query = query.where(BibleVersion.language_tag.ilike(f"{language}%"))
+
+        versions: list[BibleVersionBase] = await query.order_by(
+            BibleVersion.language_tag, BibleVersion.youversion_bible_id
         ).fetch(as_model=BibleVersionBase)
-        
+
         return BibleVersionList(versions=versions)
 
     @distributed_trace()
@@ -81,7 +80,9 @@ class BibleHandler:
             .fetchval()
         )
         if not version_exists:
-            raise NotFoundException(detail=f"Bible version {bible_version_id} not found or inactive")
+            raise NotFoundException(
+                detail=f"Bible version {bible_version_id} not found or inactive"
+            )
 
         books: list[BibleBookBase] = await (
             self._session.select(
@@ -98,11 +99,11 @@ class BibleHandler:
             .order_by(BibleBook.sequence)
             .fetch(as_model=BibleBookBase)
         )
-        
+
         # Split into old and new testament
         old_testament = [book for book in books if book.canon == "old_testament"]
         new_testament = [book for book in books if book.canon == "new_testament"]
-        
+
         return BibleBookList(old_testament=old_testament, new_testament=new_testament)
 
     @distributed_trace()
@@ -132,9 +133,11 @@ class BibleHandler:
             .where(BibleVersion.is_active == True)  # noqa
             .fetchrow()
         )
-        
+
         if not book_with_version:
-            raise NotFoundException(detail=f"Book {book_id} not found or version is inactive")
+            raise NotFoundException(
+                detail=f"Book {book_id} not found or version is inactive"
+            )
 
         # Get verses
         verses: list[BibleVerseBase] = await (
@@ -163,8 +166,8 @@ class BibleHandler:
     async def search_verses(
         self,
         q: str,
-        bible_version_id: Optional[UUID] = None,
-        book_id: Optional[UUID] = None,
+        bible_version_id: UUID | None = None,
+        book_id: UUID | None = None,
         limit: int = 20,
         offset: int = 0,
     ) -> BibleSearchResponse:
@@ -206,7 +209,12 @@ class BibleHandler:
 
         # Get results
         results: list[BibleSearchResult] = await (
-            query.order_by(BibleVersion.youversion_bible_id, BibleBook.sequence, BibleVerse.chapter, BibleVerse.verse)
+            query.order_by(
+                BibleVersion.youversion_bible_id,
+                BibleBook.sequence,
+                BibleVerse.chapter,
+                BibleVerse.verse,
+            )
             .limit(limit)
             .offset(offset)
             .fetch(as_model=BibleSearchResult)
@@ -218,4 +226,3 @@ class BibleHandler:
             limit=limit,
             offset=offset,
         )
-

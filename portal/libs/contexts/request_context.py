@@ -2,7 +2,6 @@
 Request Context (per-request)
 """
 from contextvars import ContextVar, Token
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -10,14 +9,14 @@ from pydantic import BaseModel
 class RequestContext(BaseModel):
     """Per-request HTTP information"""
 
-    ip: Optional[str] = None
-    client_ip: Optional[str] = None
-    user_agent: Optional[str] = None
-    method: Optional[str] = None
-    host: Optional[str] = None
-    url: Optional[str] = None
-    path: Optional[str] = None
-    request_id: Optional[str] = None
+    ip: str | None = None
+    client_ip: str | None = None
+    user_agent: str | None = None
+    method: str | None = None
+    host: str | None = None
+    url: str | None = None
+    path: str | None = None
+    request_id: str | None = None
 
 
 request_context_var: ContextVar[RequestContext] = ContextVar("RequestContext")
