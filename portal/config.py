@@ -118,8 +118,10 @@ class Configuration(BaseSettings):
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = int(os.getenv(key="PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", default="60"))
     PASSWORD_RESET_TOKEN_SALT: str = os.getenv(key="PASSWORD_RESET_TOKEN_SALT", default="")
 
-    # [App magic link]
-    MAGIC_LINK_TOKEN_EXPIRE_MINUTES: int = int(os.getenv(key="MAGIC_LINK_TOKEN_EXPIRE_MINUTES", default="15"))
+    # [App email OTP — ADR 0008. Short numeric passcode, hashed in Redis with a short TTL.]
+    OTP_CODE_EXPIRE_MINUTES: int = int(os.getenv(key="OTP_CODE_EXPIRE_MINUTES", default="10"))
+    OTP_REQUEST_MAX_PER_WINDOW: int = int(os.getenv(key="OTP_REQUEST_MAX_PER_WINDOW", default="3"))
+    OTP_REQUEST_WINDOW_SECONDS: int = int(os.getenv(key="OTP_REQUEST_WINDOW_SECONDS", default="600"))
 
     # [Admin Google ID-token sign-in — ADR 0006. Comma-separated Client ID allowlist; empty disables Google admin sign-in.]
     GOOGLE_ADMIN_CLIENT_IDS: str = os.getenv(key="GOOGLE_ADMIN_CLIENT_IDS", default="")

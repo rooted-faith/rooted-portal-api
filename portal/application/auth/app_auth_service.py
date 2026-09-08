@@ -1,5 +1,5 @@
 """
-App (End user) passwordless magic-link auth use cases.
+App (End user) passwordless email-OTP auth use cases (ADR 0008).
 """
 
 import hashlib
@@ -10,27 +10,31 @@ from uuid import UUID, uuid4
 
 from portal.application.app.commands import ProvisionIdentityCommand
 from portal.application.app.end_user_provisioning_service import EndUserProvisioningService
-from portal.application.auth.commands import AppMagicLinkRequestCommand, AppMagicLinkVerifyCommand
+from portal.application.auth.commands import AppOtpRequestCommand, AppOtpVerifyCommand
 from portal.application.auth.mappers import normalize_user_for_token
 from portal.application.auth.member_web_app_resolver import resolve_request_app_code
-from portal.application.auth.results import MagicLinkRequestResult, MemberLoginResult, MemberProfileResult, TokenResult, UserSensitive
+from portal.application.auth.results import MemberLoginResult, MemberProfileResult, OtpRequestResult, TokenResult, UserSensitive
 from portal.config import settings
 from portal.domain.app.ports import EndUserRepositoryPort, PreferencesRepositoryPort
 from portal.domain.auth.member_web_app import MemberWebAppRegistry
-from portal.domain.auth.ports import MagicLinkMailerPort, MagicLinkTokenPort, UserRepositoryPort
-from portal.exceptions.responses import UnauthorizedException
+from portal.domain.auth.ports import OtpMailerPort, OtpTokenPort, UserRepositoryPort
+from portal.exceptions.responses import TooManyRequestsException, UnauthorizedException
 from portal.libs.consts.enums import AccessTokenAudType
+from portal.libs.contexts.request_context import get_resolved_locale_code
 from portal.libs.tracing.distributed_trace import distributed_trace
 from portal.providers.jwt_provider import JWTProvider
 from portal.providers.member_refresh_app_binding_provider import MemberRefreshAppBindingProvider
 from portal.providers.refresh_token_provider import RefreshTokenProvider
 
-_MAGIC_LINK_ACK_MESSAGE = "If the email is valid, a magic link has been sent"
+_OTP_ACK_MESSAGE = "If the email is valid, a passcode has been sent"
+_OTP_FAILURE_DETAIL = "Invalid or expired passcode"
+_OTP_THROTTLED_DETAIL = "Too many passcode requests, please try again later"
+_OTP_CODE_DIGITS = 6
 
 
 class AppAuthService:
     """
-    Passwordless magic-link request/verify for End users.
+    Email one-time passcode request/verify for End users.
 
     Issues member JWTs via shared providers; product identity in the response
     is app.user.id (End user), not auth.user.id.
@@ -42,8 +46,8 @@ class AppAuthService:
         user_repository: UserRepositoryPort,
         end_user_repository: EndUserRepositoryPort,
         preferences_repository: PreferencesRepositoryPort,
-        magic_link_token_store: MagicLinkTokenPort,
-        magic_link_mailer: MagicLinkMailerPort,
+        otp_token_store: OtpTokenPort,
+        otp_mailer: OtpMailerPort,
         jwt_provider: JWTProvider,
         refresh_token_provider: RefreshTokenProvider,
         member_refresh_app_binding_provider: Optional[MemberRefreshAppBindingProvider],
@@ -53,8 +57,8 @@ class AppAuthService:
         self._user_repository = user_repository
         self._end_user_repository = end_user_repository
         self._preferences_repository = preferences_repository
-        self._magic_link_token_store = magic_link_token_store
-        self._magic_link_mailer = magic_link_mailer
+        self._otp_token_store = otp_token_store
+        self._otp_mailer = otp_mailer
         self._jwt_provider = jwt_provider
         self._refresh_token_provider = refresh_token_provider
         self._member_refresh_app_binding_provider = member_refresh_app_binding_provider
@@ -66,41 +70,59 @@ class AppAuthService:
         return app_code
 
     @staticmethod
-    def _hash_token(token: str) -> str:
-        return hashlib.sha256(token.encode("utf-8")).hexdigest()
+    def _generate_code() -> str:
+        return f"{secrets.randbelow(10**_OTP_CODE_DIGITS):0{_OTP_CODE_DIGITS}d}"
+
+    @staticmethod
+    def _hash_code(email: str, code: str) -> str:
+        return hashlib.sha256(f"{email}:{code}".encode("utf-8")).hexdigest()
 
     @distributed_trace()
-    async def request_magic_link(self, command: AppMagicLinkRequestCommand) -> MagicLinkRequestResult:
+    async def request_otp(self, command: AppOtpRequestCommand) -> OtpRequestResult:
+        """
+        Always answer with the same acknowledgement, whether or not the email has an
+        account. The passcode email's language is the locale CoreRequestMiddleware
+        already resolved from this request's Accept-Language (ADR 0009).
+        """
         email = command.email.strip().lower()
-        token = secrets.token_urlsafe(32)
-        ttl_seconds = settings.MAGIC_LINK_TOKEN_EXPIRE_MINUTES * 60
-        await self._magic_link_token_store.store(email, self._hash_token(token), ttl_seconds)
-        await self._magic_link_mailer.send_magic_link(email, token)
-        return MagicLinkRequestResult(message=_MAGIC_LINK_ACK_MESSAGE)
+        allowed = await self._otp_token_store.allow_request(
+            email, max_requests=settings.OTP_REQUEST_MAX_PER_WINDOW, window_seconds=settings.OTP_REQUEST_WINDOW_SECONDS
+        )
+        if not allowed:
+            raise TooManyRequestsException(detail=_OTP_THROTTLED_DETAIL)
+
+        code = self._generate_code()
+        await self._otp_token_store.store(email, self._hash_code(email, code), settings.OTP_CODE_EXPIRE_MINUTES * 60)
+        await self._otp_mailer.send_otp(email, code, locale=get_resolved_locale_code())
+        return OtpRequestResult(message=_OTP_ACK_MESSAGE)
 
     @distributed_trace()
-    async def verify_magic_link(self, command: AppMagicLinkVerifyCommand) -> MemberLoginResult:
+    async def verify_otp(self, command: AppOtpVerifyCommand) -> MemberLoginResult:
+        """
+        Redeem a live passcode: sign in an existing End user, or provision credential +
+        End user + Preferences on first use. Every rejection path raises the same generic
+        failure — no account enumeration.
+        """
         app_code = self._resolve_app_code()
         email = command.email.strip().lower()
-        token_hash = self._hash_token(command.token)
-        if not await self._magic_link_token_store.consume(email, token_hash):
-            raise UnauthorizedException(detail="Invalid or expired magic link")
+        if not await self._otp_token_store.consume(email, self._hash_code(email, command.code)):
+            raise UnauthorizedException(detail=_OTP_FAILURE_DETAIL)
 
         user = await self._user_repository.get_sensitive_by_email_without_profile(email)
         if user is None:
             provisioned = await self._provisioning_service.provision(ProvisionIdentityCommand(email=email, password=None, create_end_user=True))
             if provisioned.end_user_id is None:
-                raise UnauthorizedException(detail="End user was not provisioned")
+                raise UnauthorizedException(detail=_OTP_FAILURE_DETAIL)
             user = await self._user_repository.get_sensitive_by_email_without_profile(email)
             if not user:
-                raise UnauthorizedException(detail="User not found after magic-link verify")
+                raise UnauthorizedException(detail=_OTP_FAILURE_DETAIL)
             end_user_id = provisioned.end_user_id
         else:
             if not user.verified or not user.is_active:
-                raise UnauthorizedException(detail="User is not allowed to access the app")
+                raise UnauthorizedException(detail=_OTP_FAILURE_DETAIL)
             end_user = await self._end_user_repository.get_by_auth_user_id(user.id)
             if not end_user:
-                raise UnauthorizedException(detail="Invalid or expired magic link")
+                raise UnauthorizedException(detail=_OTP_FAILURE_DETAIL)
             end_user_id = end_user.id
 
         preferences = await self._preferences_repository.get_by_user_id(end_user_id)

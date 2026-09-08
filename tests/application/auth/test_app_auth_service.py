@@ -1,9 +1,10 @@
 """
-Application-service seam: End user magic-link request / verify (stub ports).
+Application-service seam: End user email-OTP request / verify (stub ports, ADR 0008).
 
 Happy path: verify for a new email provisions passwordless credential + End user
 + Preferences and returns member tokens; verify for an existing End user returns
-tokens without a password. Invalid/expired tokens are rejected.
+tokens without a password. Wrong/expired/consumed codes are rejected with one
+generic failure, and repeated requests for the same email are throttled.
 """
 
 from typing import Optional
@@ -12,10 +13,10 @@ from uuid import UUID, uuid4
 import pytest
 
 from portal.application.auth.app_auth_service import AppAuthService
-from portal.application.auth.commands import AppMagicLinkRequestCommand, AppMagicLinkVerifyCommand
+from portal.application.auth.commands import AppOtpRequestCommand, AppOtpVerifyCommand
 from portal.application.auth.results import MemberLoginResult, UserSensitive
 from portal.domain.app.entities import EndUser, UserPreferences
-from portal.exceptions.responses import UnauthorizedException
+from portal.exceptions.responses import TooManyRequestsException, UnauthorizedException
 
 
 class StubPasswordProvider:
@@ -113,38 +114,47 @@ class StubMemberWebAppRegistry:
         return None
 
 
-class StubMagicLinkTokenStore:
+class StubOtpTokenStore:
     def __init__(self):
-        self._by_email: dict[str, str] = {}
+        self.code_hash_by_email: dict[str, str] = {}
+        self.requests_by_email: dict[str, int] = {}
+        self.quota_calls: list[tuple[str, int, int]] = []
+        self.allow_requests = True
 
-    async def store(self, email: str, token_hash: str, ttl_seconds: int) -> None:
-        self._by_email[email.strip().lower()] = token_hash
+    async def store(self, email: str, code_hash: str, ttl_seconds: int) -> None:
+        self.code_hash_by_email[email.strip().lower()] = code_hash
 
-    async def consume(self, email: str, token_hash: str) -> bool:
+    async def consume(self, email: str, code_hash: str) -> bool:
         key = email.strip().lower()
-        stored = self._by_email.pop(key, None)
-        return stored is not None and stored == token_hash
+        stored = self.code_hash_by_email.pop(key, None)
+        return stored is not None and stored == code_hash
+
+    async def allow_request(self, email: str, *, max_requests: int, window_seconds: int) -> bool:
+        key = email.strip().lower()
+        self.quota_calls.append((key, max_requests, window_seconds))
+        self.requests_by_email[key] = self.requests_by_email.get(key, 0) + 1
+        if not self.allow_requests:
+            return False
+        return self.requests_by_email[key] <= max_requests
 
 
-class StubMagicLinkMailer:
+class StubOtpMailer:
     def __init__(self):
-        self.sent: list[tuple[str, str]] = []
+        self.sent: list[tuple[str, str, Optional[str]]] = []
 
-    async def send_magic_link(self, email: str, token: str) -> None:
-        self.sent.append((email, token))
+    async def send_otp(self, email: str, code: str, *, locale: Optional[str]) -> None:
+        self.sent.append((email, code, locale))
 
 
-def _build_service() -> tuple[
-    AppAuthService, StubUserRepository, StubEndUserRepository, StubPreferencesRepository, StubMagicLinkMailer, StubMagicLinkTokenStore
-]:
+def _build_service() -> tuple[AppAuthService, StubUserRepository, StubEndUserRepository, StubPreferencesRepository, StubOtpMailer, StubOtpTokenStore]:
     from portal.application.app.end_user_provisioning_service import EndUserProvisioningService
 
     user_repo = StubUserRepository()
     end_user_repo = StubEndUserRepository()
     prefs_repo = StubPreferencesRepository()
     password = StubPasswordProvider()
-    mailer = StubMagicLinkMailer()
-    token_store = StubMagicLinkTokenStore()
+    mailer = StubOtpMailer()
+    token_store = StubOtpTokenStore()
     provisioning = EndUserProvisioningService(
         user_repository=user_repo, end_user_repository=end_user_repo, preferences_repository=prefs_repo, password_provider=password
     )
@@ -153,8 +163,8 @@ def _build_service() -> tuple[
         user_repository=user_repo,
         end_user_repository=end_user_repo,
         preferences_repository=prefs_repo,
-        magic_link_token_store=token_store,
-        magic_link_mailer=mailer,
+        otp_token_store=token_store,
+        otp_mailer=mailer,
         jwt_provider=StubJwtProvider(),
         refresh_token_provider=StubRefreshTokenProvider(),
         member_refresh_app_binding_provider=StubMemberRefreshAppBindingProvider(),
@@ -163,18 +173,31 @@ def _build_service() -> tuple[
     return service, user_repo, end_user_repo, prefs_repo, mailer, token_store
 
 
-async def _request_and_get_token(service: AppAuthService, mailer: StubMagicLinkMailer, email: str) -> str:
-    await service.request_magic_link(AppMagicLinkRequestCommand(email=email))
+async def _request_and_get_code(service: AppAuthService, mailer: StubOtpMailer, email: str) -> str:
+    await service.request_otp(AppOtpRequestCommand(email=email))
     assert mailer.sent
     return mailer.sent[-1][1]
 
 
 @pytest.mark.asyncio
+async def test_requested_code_is_six_digits_and_never_returned_to_the_caller():
+    service, *_rest, mailer, token_store = _build_service()
+
+    result = await service.request_otp(AppOtpRequestCommand(email="jay@example.com"))
+
+    code = mailer.sent[-1][1]
+    assert len(code) == 6 and code.isdigit()
+    assert code not in result.message
+    # only the hash is ever handed to the store
+    assert code not in token_store.code_hash_by_email["jay@example.com"]
+
+
+@pytest.mark.asyncio
 async def test_verify_new_email_creates_passwordless_end_user_and_returns_tokens():
     service, user_repo, end_user_repo, prefs_repo, mailer, _ = _build_service()
-    token = await _request_and_get_token(service, mailer, "jay@example.com")
+    code = await _request_and_get_code(service, mailer, "jay@example.com")
 
-    result = await service.verify_magic_link(AppMagicLinkVerifyCommand(email="jay@example.com", token=token))
+    result = await service.verify_otp(AppOtpVerifyCommand(email="jay@example.com", code=code))
 
     assert isinstance(result, MemberLoginResult)
     assert result.token.access_token == "access-token"
@@ -196,11 +219,11 @@ async def test_verify_new_email_creates_passwordless_end_user_and_returns_tokens
 @pytest.mark.asyncio
 async def test_verify_existing_email_returns_tokens_without_password():
     service, user_repo, end_user_repo, prefs_repo, mailer, _ = _build_service()
-    first_token = await _request_and_get_token(service, mailer, "jay@example.com")
-    await service.verify_magic_link(AppMagicLinkVerifyCommand(email="jay@example.com", token=first_token))
+    first_code = await _request_and_get_code(service, mailer, "jay@example.com")
+    await service.verify_otp(AppOtpVerifyCommand(email="jay@example.com", code=first_code))
 
-    second_token = await _request_and_get_token(service, mailer, "jay@example.com")
-    result = await service.verify_magic_link(AppMagicLinkVerifyCommand(email="jay@example.com", token=second_token))
+    second_code = await _request_and_get_code(service, mailer, "jay@example.com")
+    result = await service.verify_otp(AppOtpVerifyCommand(email="jay@example.com", code=second_code))
 
     assert result.token.access_token == "access-token"
     assert result.member.email == "jay@example.com"
@@ -211,22 +234,38 @@ async def test_verify_existing_email_returns_tokens_without_password():
 
 
 @pytest.mark.asyncio
-async def test_verify_rejects_invalid_token():
+async def test_verify_rejects_wrong_code():
     service, *_rest, mailer, _store = _build_service()
-    await _request_and_get_token(service, mailer, "jay@example.com")
+    await _request_and_get_code(service, mailer, "jay@example.com")
 
     with pytest.raises(UnauthorizedException):
-        await service.verify_magic_link(AppMagicLinkVerifyCommand(email="jay@example.com", token="not-the-token"))
+        await service.verify_otp(AppOtpVerifyCommand(email="jay@example.com", code="000000"))
 
 
 @pytest.mark.asyncio
-async def test_verify_rejects_expired_or_consumed_token():
+async def test_verify_rejects_expired_or_consumed_code():
     service, *_rest, mailer, _store = _build_service()
-    token = await _request_and_get_token(service, mailer, "jay@example.com")
-    await service.verify_magic_link(AppMagicLinkVerifyCommand(email="jay@example.com", token=token))
+    code = await _request_and_get_code(service, mailer, "jay@example.com")
+    await service.verify_otp(AppOtpVerifyCommand(email="jay@example.com", code=code))
 
     with pytest.raises(UnauthorizedException):
-        await service.verify_magic_link(AppMagicLinkVerifyCommand(email="jay@example.com", token=token))
+        await service.verify_otp(AppOtpVerifyCommand(email="jay@example.com", code=code))
+
+
+@pytest.mark.asyncio
+async def test_every_verify_rejection_shares_one_generic_detail():
+    service, user_repo, _end_user_repo, _prefs, mailer, _store = _build_service()
+    await user_repo.create_credential(auth_user_id=uuid4(), email="admin-only@example.com", password_hash="hashed:Secure1!", is_admin=True, verified=True)
+
+    await _request_and_get_code(service, mailer, "jay@example.com")
+    with pytest.raises(UnauthorizedException) as wrong_code:
+        await service.verify_otp(AppOtpVerifyCommand(email="jay@example.com", code="000000"))
+
+    credential_code = await _request_and_get_code(service, mailer, "admin-only@example.com")
+    with pytest.raises(UnauthorizedException) as no_end_user:
+        await service.verify_otp(AppOtpVerifyCommand(email="admin-only@example.com", code=credential_code))
+
+    assert wrong_code.value.detail == no_end_user.value.detail
 
 
 @pytest.mark.asyncio
@@ -234,20 +273,61 @@ async def test_verify_rejects_credential_without_end_user():
     service, user_repo, end_user_repo, _prefs, mailer, _store = _build_service()
     auth_user_id = uuid4()
     await user_repo.create_credential(auth_user_id=auth_user_id, email="admin-only@example.com", password_hash="hashed:Secure1!", is_admin=True, verified=True)
-    token = await _request_and_get_token(service, mailer, "admin-only@example.com")
+    code = await _request_and_get_code(service, mailer, "admin-only@example.com")
 
     with pytest.raises(UnauthorizedException):
-        await service.verify_magic_link(AppMagicLinkVerifyCommand(email="admin-only@example.com", token=token))
+        await service.verify_otp(AppOtpVerifyCommand(email="admin-only@example.com", code=code))
     assert end_user_repo.by_auth_user_id == {}
 
 
 @pytest.mark.asyncio
-async def test_request_magic_link_does_not_reveal_whether_email_exists():
+async def test_request_otp_does_not_reveal_whether_email_exists():
     service, *_rest, mailer, _store = _build_service()
 
-    unknown = await service.request_magic_link(AppMagicLinkRequestCommand(email="unknown@example.com"))
-    known_prep = await _request_and_get_token(service, mailer, "new@example.com")
-    await service.verify_magic_link(AppMagicLinkVerifyCommand(email="new@example.com", token=known_prep))
-    known = await service.request_magic_link(AppMagicLinkRequestCommand(email="new@example.com"))
+    unknown = await service.request_otp(AppOtpRequestCommand(email="unknown@example.com"))
+    known_prep = await _request_and_get_code(service, mailer, "new@example.com")
+    await service.verify_otp(AppOtpVerifyCommand(email="new@example.com", code=known_prep))
+    known = await service.request_otp(AppOtpRequestCommand(email="new@example.com"))
 
     assert unknown.message == known.message
+
+
+@pytest.mark.asyncio
+async def test_request_otp_is_rate_limited_per_email():
+    from portal.config import settings
+
+    service, *_rest, _mailer, token_store = _build_service()
+
+    for _ in range(settings.OTP_REQUEST_MAX_PER_WINDOW):
+        await service.request_otp(AppOtpRequestCommand(email="jay@example.com"))
+
+    with pytest.raises(TooManyRequestsException):
+        await service.request_otp(AppOtpRequestCommand(email="jay@example.com"))
+
+    # a different email is unaffected by the exhausted window
+    await service.request_otp(AppOtpRequestCommand(email="other@example.com"))
+    assert token_store.quota_calls[0][1:] == (settings.OTP_REQUEST_MAX_PER_WINDOW, settings.OTP_REQUEST_WINDOW_SECONDS)
+
+
+@pytest.mark.asyncio
+async def test_throttled_request_does_not_issue_or_store_a_code():
+    service, *_rest, mailer, token_store = _build_service()
+    token_store.allow_requests = False
+
+    with pytest.raises(TooManyRequestsException):
+        await service.request_otp(AppOtpRequestCommand(email="jay@example.com"))
+
+    assert mailer.sent == []
+    assert token_store.code_hash_by_email == {}
+
+
+@pytest.mark.asyncio
+async def test_otp_email_uses_the_locale_resolved_for_this_request(monkeypatch: pytest.MonkeyPatch):
+    import portal.application.auth.app_auth_service as service_module
+
+    service, *_rest, mailer, _store = _build_service()
+    monkeypatch.setattr(service_module, "get_resolved_locale_code", lambda: "en")
+
+    await service.request_otp(AppOtpRequestCommand(email="jay@example.com"))
+
+    assert mailer.sent[-1][2] == "en"

@@ -6,26 +6,26 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 from portal.domain.common.mixins import UUIDModel
 from portal.serializers.mixins import LoginResponse, TokenResponse
 
 
-class MemberMagicLinkRequest(BaseModel):
-    """Request a passwordless magic-link email."""
+class MemberOtpRequest(BaseModel):
+    """Request a one-time passcode by email."""
 
-    email: str = Field(..., description="End user email")
-
-
-class MemberMagicLinkVerifyRequest(BaseModel):
-    """Verify magic-link token and sign in."""
-
-    email: str = Field(..., description="End user email")
-    token: str = Field(..., description="One-time magic-link token")
+    email: EmailStr = Field(..., description="End user email")
 
 
-class MemberMagicLinkRequestResponse(BaseModel):
+class MemberOtpVerifyRequest(BaseModel):
+    """Verify a one-time passcode and sign in."""
+
+    email: EmailStr = Field(..., description="End user email")
+    code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$", description="Six-digit one-time passcode")
+
+
+class MemberOtpRequestResponse(BaseModel):
     """Anti-enumeration acknowledgement."""
 
     message: str = Field(..., description="Generic success message")

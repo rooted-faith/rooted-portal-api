@@ -14,17 +14,17 @@ class LoginCommand(BaseModel):
     password: str = Field(..., description="Admin password")
 
 
-class AppMagicLinkRequestCommand(BaseModel):
-    """Request a passwordless magic-link email."""
+class AppOtpRequestCommand(BaseModel):
+    """Request a one-time passcode by email (ADR 0008)."""
 
     email: str = Field(..., description="End user email")
 
 
-class AppMagicLinkVerifyCommand(BaseModel):
-    """Verify a magic-link token and sign in (or provision) the End user."""
+class AppOtpVerifyCommand(BaseModel):
+    """Verify a one-time passcode and sign in (or provision) the End user."""
 
     email: str = Field(..., description="End user email")
-    token: str = Field(..., description="One-time magic-link token")
+    code: str = Field(..., description="One-time passcode")
 
 
 class LoginWithoutValidateCommand(BaseModel):

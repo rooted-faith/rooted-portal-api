@@ -10,8 +10,8 @@ from portal.application.bible.bible_service import BibleService
 from portal.application.push.push_service import PushService
 from portal.config import settings as app_settings
 from portal.domain.auth.member_web_app import MemberWebAppRegistry, parse_member_web_apps
-from portal.infrastructure.cache.magic_link_token_cache import MagicLinkTokenCache
-from portal.infrastructure.mail.magic_link_mailer import MagicLinkMailer
+from portal.infrastructure.cache.otp_token_cache import OtpTokenCache
+from portal.infrastructure.mail.otp_mailer import OtpMailer
 from portal.infrastructure.persistence.repositories.app.end_user_repository import EndUserRepository, PreferencesRepository
 from portal.infrastructure.persistence.repositories.bible.bible_repository import BibleRepository
 from portal.infrastructure.persistence.repositories.push.device_repository import DeviceRepository
@@ -48,8 +48,8 @@ class AppContainer(containers.DeclarativeContainer):
         password_provider=core.password_provider,
     )
 
-    magic_link_token_store = providers.Factory(MagicLinkTokenCache, redis_client=core.redis_client)
-    magic_link_mailer = providers.Singleton(MagicLinkMailer)
+    otp_token_store = providers.Factory(OtpTokenCache, redis_client=core.redis_client)
+    otp_mailer = providers.Singleton(OtpMailer)
 
     member_web_app_registry = providers.Singleton(lambda: MemberWebAppRegistry(parse_member_web_apps(app_settings.MEMBER_WEB_APPS)))
     app_auth_service = providers.Factory(
@@ -58,8 +58,8 @@ class AppContainer(containers.DeclarativeContainer):
         user_repository=user_repository,
         end_user_repository=end_user_repository,
         preferences_repository=preferences_repository,
-        magic_link_token_store=magic_link_token_store,
-        magic_link_mailer=magic_link_mailer,
+        otp_token_store=otp_token_store,
+        otp_mailer=otp_mailer,
         jwt_provider=core.jwt_provider,
         refresh_token_provider=core.refresh_token_provider,
         member_refresh_app_binding_provider=core.member_refresh_app_binding_provider,

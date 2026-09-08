@@ -61,20 +61,24 @@ class UserRepositoryPort(Protocol):
         ...
 
 
-class MagicLinkTokenPort(Protocol):
-    """Ephemeral one-time magic-link tokens (hashed at rest)."""
+class OtpTokenPort(Protocol):
+    """Ephemeral one-time passcodes keyed by email (hashed at rest), plus their per-email request quota."""
 
-    async def store(self, email: str, token_hash: str, ttl_seconds: int) -> None: ...
+    async def store(self, email: str, code_hash: str, ttl_seconds: int) -> None: ...
 
-    async def consume(self, email: str, token_hash: str) -> bool:
-        """Return True and invalidate when the hash matches a live token for email."""
+    async def consume(self, email: str, code_hash: str) -> bool:
+        """Return True and invalidate when the hash matches a live passcode for email."""
+        ...
+
+    async def allow_request(self, email: str, *, max_requests: int, window_seconds: int) -> bool:
+        """Count this request against the email's rolling window; False once the window is exhausted."""
         ...
 
 
-class MagicLinkMailerPort(Protocol):
-    """Deliver the plain magic-link token out-of-band (email)."""
+class OtpMailerPort(Protocol):
+    """Deliver the plain one-time passcode out-of-band (email)."""
 
-    async def send_magic_link(self, email: str, token: str) -> None: ...
+    async def send_otp(self, email: str, code: str, *, locale: Optional[str]) -> None: ...
 
 
 class GoogleIdTokenVerifierPort(Protocol):
