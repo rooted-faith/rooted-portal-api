@@ -35,3 +35,12 @@ class GoogleIdentityClaims(BaseModel):
     email: Optional[str] = Field(default=None, description="Email claim as asserted by Google")
     email_verified: bool = Field(default=False, description="Whether Google verified the email claim")
     audience: str = Field(..., description="Token audience (aud) — the Client ID the token was issued for")
+
+
+class AppleIdentityClaims(BaseModel):
+    """Verified Apple identity-token claims relevant to End-user sign-in (ADR 0008)."""
+
+    subject: str = Field(..., description="Apple account stable subject (sub)")
+    email: Optional[str] = Field(default=None, description="Email claim as asserted by Apple")
+    email_verified: bool = Field(default=False, description="Whether Apple verified the email claim")
+    audience: str = Field(..., description="Token audience (aud) — the app Client ID or Services ID")

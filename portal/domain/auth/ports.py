@@ -6,7 +6,7 @@ from typing import Any, Optional, Protocol
 from uuid import UUID
 
 from portal.application.auth.results import UserDetail, UserSensitive
-from portal.domain.auth.entities import GoogleIdentityClaims
+from portal.domain.auth.entities import AppleIdentityClaims, GoogleIdentityClaims
 
 
 class UserRepositoryPort(Protocol):
@@ -86,4 +86,12 @@ class GoogleIdTokenVerifierPort(Protocol):
 
     async def verify(self, id_token: str, audiences: list[str]) -> Optional[GoogleIdentityClaims]:
         """Return verified claims, or None when the token is invalid, expired, or not issued for one of `audiences`."""
+        ...
+
+
+class AppleIdTokenVerifierPort(Protocol):
+    """Verify an Apple-issued identity token per ADR 0008."""
+
+    async def verify(self, id_token: str, audiences: list[str]) -> Optional[AppleIdentityClaims]:
+        """Return verified claims, or None when signature, issuer, expiry, or audience is invalid."""
         ...

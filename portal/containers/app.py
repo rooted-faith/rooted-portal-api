@@ -6,6 +6,7 @@ from dependency_injector import containers, providers
 
 from portal.application.app.end_user_provisioning_service import EndUserProvisioningService
 from portal.application.app.end_user_service import EndUserService
+from portal.application.auth.app_apple_auth_service import AppAppleAuthService
 from portal.application.auth.app_auth_service import AppAuthService
 from portal.application.auth.app_google_auth_service import AppGoogleAuthService
 from portal.application.auth.member_login_service import MemberLoginService
@@ -82,5 +83,13 @@ class AppContainer(containers.DeclarativeContainer):
         user_repository=user_repository,
         end_user_repository=end_user_repository,
         google_id_token_verifier=core.google_id_token_verifier,
+        member_login_service=member_login_service,
+    )
+    app_apple_auth_service = providers.Factory(
+        AppAppleAuthService,
+        provisioning_service=end_user_provisioning_service,
+        user_repository=user_repository,
+        end_user_repository=end_user_repository,
+        apple_id_token_verifier=core.apple_id_token_verifier,
         member_login_service=member_login_service,
     )
