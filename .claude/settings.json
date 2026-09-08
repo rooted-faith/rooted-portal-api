@@ -3,14 +3,18 @@
     "additionalDirectories": [
       "../rooted-portal-frontend",
       "../rooted-docs",
-      "../rooted-app"
+      "../rooted-app",
+      "../rooted_flutter"
     ],
     "deny": [
       "Read(../rooted-portal-frontend/node_modules/**)",
       "Read(../rooted-portal-frontend/dist/**)",
       "Read(../rooted-docs/site/**)",
       "Read(../rooted-app/node_modules/**)",
-      "Read(../rooted-app/.expo/**)"
+      "Read(../rooted-app/.expo/**)",
+      "Read(../rooted_flutter/build/**)",
+      "Read(../rooted_flutter/ios/**)",
+      "Read(../rooted_flutter/android/**)"
     ]
   }
 }
