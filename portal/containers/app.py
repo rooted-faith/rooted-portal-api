@@ -5,6 +5,7 @@ Member app application services.
 from dependency_injector import containers, providers
 
 from portal.application.app.end_user_provisioning_service import EndUserProvisioningService
+from portal.application.app.end_user_service import EndUserService
 from portal.application.auth.app_auth_service import AppAuthService
 from portal.application.auth.app_google_auth_service import AppGoogleAuthService
 from portal.application.auth.member_login_service import MemberLoginService
@@ -53,10 +54,13 @@ class AppContainer(containers.DeclarativeContainer):
     otp_token_store = providers.Factory(OtpTokenCache, redis_client=core.redis_client)
     otp_mailer = providers.Singleton(OtpMailer)
 
+    end_user_service = providers.Factory(EndUserService, end_user_repository=end_user_repository)
+
     member_web_app_registry = providers.Singleton(lambda: MemberWebAppRegistry(parse_member_web_apps(app_settings.MEMBER_WEB_APPS)))
     member_login_service = providers.Factory(
         MemberLoginService,
         user_repository=user_repository,
+        end_user_repository=end_user_repository,
         preferences_repository=preferences_repository,
         jwt_provider=core.jwt_provider,
         refresh_token_provider=core.refresh_token_provider,

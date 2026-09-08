@@ -72,6 +72,17 @@ class StubEndUserRepository:
     async def get_by_auth_user_id(self, auth_user_id: UUID):
         return self.by_auth_user_id.get(auth_user_id)
 
+    async def get_by_id(self, end_user_id: UUID):
+        return next((end_user for end_user in self.by_auth_user_id.values() if end_user.id == end_user_id), None)
+
+    async def set_reonboarding_requested_at(self, end_user_id: UUID, requested_at):
+        end_user = await self.get_by_id(end_user_id)
+        if end_user is None:
+            return None
+        updated = end_user.model_copy(update={"reonboarding_requested_at": requested_at})
+        self.by_auth_user_id[updated.auth_user_id] = updated
+        return updated
+
 
 class StubPreferencesRepository:
     def __init__(self):
@@ -161,6 +172,7 @@ def _build_service() -> tuple[AppAuthService, StubUserRepository, StubEndUserRep
     )
     member_login_service = MemberLoginService(
         user_repository=user_repo,
+        end_user_repository=end_user_repo,
         preferences_repository=prefs_repo,
         jwt_provider=StubJwtProvider(),
         refresh_token_provider=StubRefreshTokenProvider(),
@@ -336,3 +348,23 @@ async def test_otp_email_uses_the_locale_resolved_for_this_request(monkeypatch: 
     await service.request_otp(AppOtpRequestCommand(email="jay@example.com"))
 
     assert mailer.sent[-1][2] == "en"
+
+
+@pytest.mark.asyncio
+async def test_login_result_surfaces_the_admin_set_reonboarding_flag():
+    """The client learns about a replay at its next natural sign-in, with no extra call (ADR 0008)."""
+    from datetime import datetime, timezone
+
+    service, user_repo, end_user_repo, _prefs, mailer, _store = _build_service()
+    first_code = await _request_and_get_code(service, mailer, "jay@example.com")
+    first = await service.verify_otp(AppOtpVerifyCommand(email="jay@example.com", code=first_code))
+    assert first.member.reonboarding_requested_at is None
+
+    credential = user_repo.by_email["jay@example.com"]
+    requested_at = datetime.now(timezone.utc)
+    await end_user_repo.set_reonboarding_requested_at(end_user_repo.by_auth_user_id[credential.id].id, requested_at)
+
+    second_code = await _request_and_get_code(service, mailer, "jay@example.com")
+    second = await service.verify_otp(AppOtpVerifyCommand(email="jay@example.com", code=second_code))
+
+    assert second.member.reonboarding_requested_at == requested_at

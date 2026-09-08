@@ -53,6 +53,7 @@ class RootContainer(containers.DeclarativeContainer):
 
     bible_service = app.bible_service
     end_user_provisioning_service = app.end_user_provisioning_service
+    end_user_service = app.end_user_service
     app_auth_service = app.app_auth_service
     app_google_auth_service = app.app_google_auth_service
     push_service = app.push_service

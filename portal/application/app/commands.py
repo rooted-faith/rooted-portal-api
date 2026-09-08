@@ -4,6 +4,7 @@ Commands for End user / identity provisioning.
 
 from datetime import time
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -28,3 +29,9 @@ class ProvisionIdentityCommand(BaseModel):
     stage: Optional[str] = Field(default=None)
     reminder_time: Optional[time] = Field(default=None)
     reminder_enabled: bool = Field(default=False)
+
+
+class RequestReonboardingCommand(BaseModel):
+    """Admin asks one End user to go through onboarding again (ADR 0008)."""
+
+    end_user_id: UUID = Field(..., description="app.user.id of the End user to flag")
