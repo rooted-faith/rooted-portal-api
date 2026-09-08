@@ -17,9 +17,10 @@ from portal.providers.password_provider import PasswordProvider
 
 class EndUserProvisioningService:
     """
-    App signup creates auth.user + app.user + Preferences together.
+    App sign-in provisioning creates auth.user + app.user + Preferences together.
     Admin-only provisioning creates the credential without app.user.
-    Password may be omitted for passwordless (email-OTP) End users.
+    End-user OTP and Identity-provider paths omit the password; shared Admin
+    credentials may still carry one.
     """
 
     def __init__(
@@ -55,8 +56,8 @@ class EndUserProvisioningService:
         display_name = self._default_display_name(email, command.display_name)
 
         auth_user_id = uuid.uuid4()
-        # OTP verify and password signup both mark verified for app use;
-        # admin-only rows stay unverified until an admin path confirms them.
+        # App sign-in provisioning marks the credential verified; admin-only
+        # rows stay unverified until an admin path confirms them.
         await self._user_repository.create_credential(
             auth_user_id=auth_user_id,
             email=email,

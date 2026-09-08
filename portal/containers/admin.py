@@ -83,7 +83,6 @@ class AdminContainer(containers.DeclarativeContainer):
         password_provider=core.password_provider,
         role_service=role_service,
         permission_service=permission_service,
-        member_refresh_app_binding_provider=core.member_refresh_app_binding_provider,
     )
     admin_google_auth_service = providers.Factory(
         AdminGoogleAuthService, user_repository=user_repository, google_id_token_verifier=core.google_id_token_verifier, login_service=login_service

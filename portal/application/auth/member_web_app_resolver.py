@@ -13,8 +13,8 @@ def resolve_request_app_code(registry: MemberWebAppRegistry, *, required: bool =
     """
     Resolve app_code from Origin (preferred) or Referer on the current request.
 
-    When Origin/Referer are absent (typical for native/Expo clients), fall back to
-    the registry default app code so password auth and refresh still work.
+    When Origin/Referer are absent (typical for native clients), fall back to
+    the registry default app code so member sign-in and refresh still work.
     :param registry:
     :param required:
     :return:
