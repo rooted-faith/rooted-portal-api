@@ -4,27 +4,18 @@ App (End user) passwordless email-OTP auth use cases (ADR 0008).
 
 import hashlib
 import secrets
-from datetime import datetime, timezone
-from typing import Optional
-from uuid import UUID, uuid4
 
 from portal.application.app.commands import ProvisionIdentityCommand
 from portal.application.app.end_user_provisioning_service import EndUserProvisioningService
 from portal.application.auth.commands import AppOtpRequestCommand, AppOtpVerifyCommand
-from portal.application.auth.mappers import normalize_user_for_token
-from portal.application.auth.member_web_app_resolver import resolve_request_app_code
-from portal.application.auth.results import MemberLoginResult, MemberProfileResult, OtpRequestResult, TokenResult, UserSensitive
+from portal.application.auth.member_login_service import MemberLoginService
+from portal.application.auth.results import MemberLoginResult, OtpRequestResult
 from portal.config import settings
-from portal.domain.app.ports import EndUserRepositoryPort, PreferencesRepositoryPort
-from portal.domain.auth.member_web_app import MemberWebAppRegistry
+from portal.domain.app.ports import EndUserRepositoryPort
 from portal.domain.auth.ports import OtpMailerPort, OtpTokenPort, UserRepositoryPort
 from portal.exceptions.responses import TooManyRequestsException, UnauthorizedException
-from portal.libs.consts.enums import AccessTokenAudType
 from portal.libs.contexts.request_context import get_resolved_locale_code
 from portal.libs.tracing.distributed_trace import distributed_trace
-from portal.providers.jwt_provider import JWTProvider
-from portal.providers.member_refresh_app_binding_provider import MemberRefreshAppBindingProvider
-from portal.providers.refresh_token_provider import RefreshTokenProvider
 
 _OTP_ACK_MESSAGE = "If the email is valid, a passcode has been sent"
 _OTP_FAILURE_DETAIL = "Invalid or expired passcode"
@@ -45,29 +36,16 @@ class AppAuthService:
         provisioning_service: EndUserProvisioningService,
         user_repository: UserRepositoryPort,
         end_user_repository: EndUserRepositoryPort,
-        preferences_repository: PreferencesRepositoryPort,
         otp_token_store: OtpTokenPort,
         otp_mailer: OtpMailerPort,
-        jwt_provider: JWTProvider,
-        refresh_token_provider: RefreshTokenProvider,
-        member_refresh_app_binding_provider: Optional[MemberRefreshAppBindingProvider],
-        member_web_app_registry: MemberWebAppRegistry,
+        member_login_service: MemberLoginService,
     ):
         self._provisioning_service = provisioning_service
         self._user_repository = user_repository
         self._end_user_repository = end_user_repository
-        self._preferences_repository = preferences_repository
         self._otp_token_store = otp_token_store
         self._otp_mailer = otp_mailer
-        self._jwt_provider = jwt_provider
-        self._refresh_token_provider = refresh_token_provider
-        self._member_refresh_app_binding_provider = member_refresh_app_binding_provider
-        self._member_web_app_registry = member_web_app_registry
-
-    def _resolve_app_code(self) -> str:
-        app_code = resolve_request_app_code(self._member_web_app_registry, required=True)
-        assert app_code is not None
-        return app_code
+        self._member_login_service = member_login_service
 
     @staticmethod
     def _generate_code() -> str:
@@ -103,7 +81,7 @@ class AppAuthService:
         End user + Preferences on first use. Every rejection path raises the same generic
         failure — no account enumeration.
         """
-        app_code = self._resolve_app_code()
+        app_code = self._member_login_service.resolve_app_code()
         email = command.email.strip().lower()
         if not await self._otp_token_store.consume(email, self._hash_code(email, command.code)):
             raise UnauthorizedException(detail=_OTP_FAILURE_DETAIL)
@@ -125,35 +103,4 @@ class AppAuthService:
                 raise UnauthorizedException(detail=_OTP_FAILURE_DETAIL)
             end_user_id = end_user.id
 
-        preferences = await self._preferences_repository.get_by_user_id(end_user_id)
-        preferred_name = preferences.display_name if preferences else None
-        return await self._issue_member_tokens(user=user, app_code=app_code, end_user_id=end_user_id, preferred_name=preferred_name)
-
-    async def _issue_member_tokens(self, *, user: UserSensitive, app_code: str, end_user_id: UUID, preferred_name: Optional[str]) -> MemberLoginResult:
-        token_user = normalize_user_for_token(user)
-        if preferred_name:
-            token_user = token_user.model_copy(update={"preferred_name": preferred_name, "first_name": preferred_name})
-
-        family_id = uuid4()
-        device_id = uuid4()
-        access_token = self._jwt_provider.create_access_token(user=token_user, family_id=family_id, aud_type=AccessTokenAudType.USER, azp=app_code)
-        refresh_token = await self._refresh_token_provider.issue(user_id=user.id, device_id=device_id, family_id=family_id)
-        if self._member_refresh_app_binding_provider:
-            await self._member_refresh_app_binding_provider.bind(family_id, app_code)
-
-        now = datetime.now(timezone.utc)
-        await self._user_repository.update_last_login_at(user_id=user.id, last_login_at=now)
-
-        expires_in = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
-        token = TokenResult(access_token=access_token, refresh_token=refresh_token, token_type="bearer", expires_in=expires_in)
-        member = MemberProfileResult(
-            id=end_user_id,
-            email=user.email or "",
-            first_name=preferred_name or "",
-            last_name="",
-            preferred_name=preferred_name,
-            roles=[],
-            preferred_locale_id=user.preferred_locale_id,
-            last_login_at=user.last_login_at,
-        )
-        return MemberLoginResult(member=member, token=token)
+        return await self._member_login_service.complete_member_login(user=user, end_user_id=end_user_id, app_code=app_code)

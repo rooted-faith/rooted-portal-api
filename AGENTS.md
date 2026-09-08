@@ -208,7 +208,7 @@ See ADR 0003.
 
 - **Passwordless:** email-OTP request/verify for End users (ADR 0008). Auth credentials may have `password_hash` null.
 - Shared JWT access/refresh infrastructure with Admin; product FKs hang off End user (`app.user`), not `auth.user` alone (ADR 0004).
-- Identity provider catalog + Identity link rows (ADR 0005). **Admin Google** ID-token HTTP is ADR 0006. End-user Apple/Google HTTP remains a future ADR.
+- Identity provider catalog + Identity link rows (ADR 0005). **Admin Google** ID-token HTTP is ADR 0006; **End-user Google** ID-token HTTP is ADR 0008 (the End-user flow may provision on first success; the Admin one never does).
 - **Excluded:** Microsoft Entra ID token exchange, Admin Apple, app password register/login as the product path, phone-as-login-id.
 
 ### Admin

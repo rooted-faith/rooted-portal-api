@@ -14,6 +14,7 @@ import pytest
 
 from portal.application.auth.app_auth_service import AppAuthService
 from portal.application.auth.commands import AppOtpRequestCommand, AppOtpVerifyCommand
+from portal.application.auth.member_login_service import MemberLoginService
 from portal.application.auth.results import MemberLoginResult, UserSensitive
 from portal.domain.app.entities import EndUser, UserPreferences
 from portal.exceptions.responses import TooManyRequestsException, UnauthorizedException
@@ -158,17 +159,21 @@ def _build_service() -> tuple[AppAuthService, StubUserRepository, StubEndUserRep
     provisioning = EndUserProvisioningService(
         user_repository=user_repo, end_user_repository=end_user_repo, preferences_repository=prefs_repo, password_provider=password
     )
-    service = AppAuthService(
-        provisioning_service=provisioning,
+    member_login_service = MemberLoginService(
         user_repository=user_repo,
-        end_user_repository=end_user_repo,
         preferences_repository=prefs_repo,
-        otp_token_store=token_store,
-        otp_mailer=mailer,
         jwt_provider=StubJwtProvider(),
         refresh_token_provider=StubRefreshTokenProvider(),
         member_refresh_app_binding_provider=StubMemberRefreshAppBindingProvider(),
         member_web_app_registry=StubMemberWebAppRegistry(),
+    )
+    service = AppAuthService(
+        provisioning_service=provisioning,
+        user_repository=user_repo,
+        end_user_repository=end_user_repo,
+        otp_token_store=token_store,
+        otp_mailer=mailer,
+        member_login_service=member_login_service,
     )
     return service, user_repo, end_user_repo, prefs_repo, mailer, token_store
 

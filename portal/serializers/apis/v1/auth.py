@@ -25,6 +25,12 @@ class MemberOtpVerifyRequest(BaseModel):
     code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$", description="Six-digit one-time passcode")
 
 
+class MemberGoogleLoginRequest(BaseModel):
+    """End-user Google ID-token sign-in request body (ADR 0008)."""
+
+    id_token: str = Field(..., description="Google ID token from the app's Google sign-in client")
+
+
 class MemberOtpRequestResponse(BaseModel):
     """Anti-enumeration acknowledgement."""
 
