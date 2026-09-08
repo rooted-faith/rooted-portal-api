@@ -29,7 +29,8 @@ router: AuthRouter = AuthRouter()
     summary="Register or refresh a push device",
     description=(
         "Upsert a push Device by device_key. Authorization is optional: when present it must verify "
-        "(invalid/expired tokens still 401), and end_user_id is always overwritten to whatever this call resolved."
+        "(invalid/expired tokens still 401), and end_user_id is always overwritten to whatever this call resolved. "
+        "The locale sent here is what push copy for this device is localized into (ADR 0009)."
     ),
 )
 @inject
@@ -41,6 +42,6 @@ async def register_device(
     end_user_id = await push_service.resolve_end_user_id(auth_user_id)
 
     result = await push_service.register_device(
-        device_key=device_key, token=body.token, platform=body.platform, app_version=body.app_version, end_user_id=end_user_id
+        device_key=device_key, token=body.token, platform=body.platform, app_version=body.app_version, locale=body.locale, end_user_id=end_user_id
     )
     return device_to_api(result)

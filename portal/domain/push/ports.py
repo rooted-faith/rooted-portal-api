@@ -13,11 +13,19 @@ class DeviceRepositoryPort(Protocol):
     """Persist push Device rows keyed by device_key."""
 
     async def upsert_device(
-        self, *, device_key: str, token: str, platform: str, app_version: Optional[str], end_user_id: Optional[UUID], last_used_at: datetime
+        self,
+        *,
+        device_key: str,
+        token: str,
+        platform: str,
+        app_version: Optional[str],
+        locale: Optional[str],
+        end_user_id: Optional[UUID],
+        last_used_at: datetime,
     ) -> Device:
         """
         Insert a Device on first registration, or overwrite token/platform/
-        app_version/last_used_at/end_user_id on every subsequent call.
+        app_version/locale/last_used_at/end_user_id on every subsequent call.
         """
 
     async def list_active_devices(self, end_user_id: UUID) -> list[Device]:

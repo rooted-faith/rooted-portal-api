@@ -15,6 +15,9 @@ class DeviceRegistrationRequest(BaseModel):
     token: str = Field(..., description="Current push token (FCM/APNs-via-FCM)")
     platform: Literal["ios", "android"] = Field(..., description="Platform: ios|android")
     app_version: Optional[str] = Field(default=None, description="Client app version")
+    locale: Optional[str] = Field(
+        default=None, max_length=20, description="This install's current system locale (e.g. zh-Hant); push copy is localized per device"
+    )
 
 
 class DeviceRegistration(BaseModel):
@@ -27,6 +30,7 @@ class DeviceRegistration(BaseModel):
     is_active: bool = Field(..., serialization_alias="isActive")
     last_used_at: datetime = Field(..., serialization_alias="lastUsedAt")
     app_version: Optional[str] = Field(default=None, serialization_alias="appVersion")
+    locale: Optional[str] = Field(default=None, description="This install's last-known system locale")
 
     @field_serializer("id", "end_user_id")
     def serialize_uuid(self, value: Optional[UUID], _info) -> Optional[str]:

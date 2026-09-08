@@ -25,22 +25,38 @@ class DeviceRepository:
         PushDevice.is_active,
         PushDevice.last_used_at,
         PushDevice.app_version,
+        PushDevice.locale,
     )
 
     def __init__(self, session: Session):
         self._session = session
 
     async def upsert_device(
-        self, *, device_key: str, token: str, platform: str, app_version: Optional[str], end_user_id: Optional[UUID], last_used_at: datetime
+        self,
+        *,
+        device_key: str,
+        token: str,
+        platform: str,
+        app_version: Optional[str],
+        locale: Optional[str],
+        end_user_id: Optional[UUID],
+        last_used_at: datetime,
     ) -> Device:
         await (
             self._session.insert(PushDevice)
             .values(
-                id=uuid4(), device_key=device_key, token=token, platform=platform, app_version=app_version, end_user_id=end_user_id, last_used_at=last_used_at
+                id=uuid4(),
+                device_key=device_key,
+                token=token,
+                platform=platform,
+                app_version=app_version,
+                locale=locale,
+                end_user_id=end_user_id,
+                last_used_at=last_used_at,
             )
             .on_conflict_do_update(
                 index_elements=["device_key"],
-                set_=dict(token=token, platform=platform, app_version=app_version, end_user_id=end_user_id, last_used_at=last_used_at),
+                set_=dict(token=token, platform=platform, app_version=app_version, locale=locale, end_user_id=end_user_id, last_used_at=last_used_at),
             )
             .execute()
         )

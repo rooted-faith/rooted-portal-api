@@ -10,14 +10,14 @@ import pytest
 from portal.application.push.push_service import PushService
 from portal.domain.app.entities import EndUser
 from portal.domain.push.constants import DeliveryStatus, PushSendStatus
-from portal.domain.push.entities import Device, Notification, PushSendResult
+from portal.domain.push.entities import Device, LocalizedNotificationCopy, Notification, NotificationCopy, PushSendResult
 
 
 class StubDeviceRepository:
     def __init__(self):
         self.devices: dict[str, Device] = {}
 
-    async def upsert_device(self, *, device_key, token, platform, app_version, end_user_id, last_used_at):
+    async def upsert_device(self, *, device_key, token, platform, app_version, locale, end_user_id, last_used_at):
         existing = self.devices.get(device_key)
         device = Device(
             id=existing.id if existing else uuid4(),
@@ -28,6 +28,7 @@ class StubDeviceRepository:
             is_active=existing.is_active if existing else True,
             last_used_at=last_used_at,
             app_version=app_version,
+            locale=locale,
         )
         self.devices[device_key] = device
         return device
@@ -93,12 +94,13 @@ def make_push_service(device_repository=None, end_user_repository=None, notifica
 @pytest.mark.asyncio
 async def test_register_device_anonymous_leaves_end_user_id_none():
     service = make_push_service()
-    result = await service.register_device(device_key="device-1", token="tok-1", platform="ios", app_version="1.0.0", end_user_id=None)
+    result = await service.register_device(device_key="device-1", token="tok-1", platform="ios", app_version="1.0.0", locale="zh-Hant", end_user_id=None)
     assert result.end_user_id is None
     assert result.device_key == "device-1"
     assert result.token == "tok-1"
     assert result.platform == "ios"
     assert result.app_version == "1.0.0"
+    assert result.locale == "zh-Hant"
     assert result.is_active is True
 
 
@@ -106,7 +108,7 @@ async def test_register_device_anonymous_leaves_end_user_id_none():
 async def test_register_device_authenticated_sets_end_user_id():
     end_user_id = uuid4()
     service = make_push_service()
-    result = await service.register_device(device_key="device-1", token="tok-1", platform="android", app_version=None, end_user_id=end_user_id)
+    result = await service.register_device(device_key="device-1", token="tok-1", platform="android", app_version=None, locale=None, end_user_id=end_user_id)
     assert result.end_user_id == end_user_id
 
 
@@ -115,15 +117,16 @@ async def test_reregistering_same_device_key_overwrites_previous_owner():
     repository = StubDeviceRepository()
     service = make_push_service(device_repository=repository)
     first_owner = uuid4()
-    first = await service.register_device(device_key="device-1", token="tok-1", platform="ios", app_version="1.0.0", end_user_id=first_owner)
+    first = await service.register_device(device_key="device-1", token="tok-1", platform="ios", app_version="1.0.0", locale="zh-Hant", end_user_id=first_owner)
 
     second_owner = uuid4()
-    second = await service.register_device(device_key="device-1", token="tok-2", platform="ios", app_version="1.1.0", end_user_id=second_owner)
+    second = await service.register_device(device_key="device-1", token="tok-2", platform="ios", app_version="1.1.0", locale="en", end_user_id=second_owner)
 
     assert second.id == first.id
     assert second.end_user_id == second_owner
     assert second.token == "tok-2"
     assert second.app_version == "1.1.0"
+    assert second.locale == "en"  # a device whose system language changed re-registers with the new one
 
 
 @pytest.mark.asyncio
@@ -131,9 +134,9 @@ async def test_reregistering_unauthenticated_after_sign_in_clears_end_user_id():
     """Sign-out case: the client calls again without a bearer token, overwriting end_user_id back to None."""
     repository = StubDeviceRepository()
     service = make_push_service(device_repository=repository)
-    await service.register_device(device_key="device-1", token="tok-1", platform="ios", app_version="1.0.0", end_user_id=uuid4())
+    await service.register_device(device_key="device-1", token="tok-1", platform="ios", app_version="1.0.0", locale="zh-Hant", end_user_id=uuid4())
 
-    signed_out = await service.register_device(device_key="device-1", token="tok-1", platform="ios", app_version="1.0.0", end_user_id=None)
+    signed_out = await service.register_device(device_key="device-1", token="tok-1", platform="ios", app_version="1.0.0", locale="zh-Hant", end_user_id=None)
 
     assert signed_out.end_user_id is None
 
@@ -159,10 +162,21 @@ async def test_resolve_end_user_id_returns_none_when_auth_user_has_no_end_user()
     assert await service.resolve_end_user_id(uuid4()) is None
 
 
-def _make_device(end_user_id, token="tok", is_active=True) -> Device:
+def _make_device(end_user_id, token="tok", is_active=True, locale="zh-Hant") -> Device:
     return Device(
-        id=uuid4(), device_key=str(uuid4()), token=token, platform="ios", end_user_id=end_user_id, is_active=is_active, last_used_at=datetime.now(timezone.utc)
+        id=uuid4(),
+        device_key=str(uuid4()),
+        token=token,
+        platform="ios",
+        end_user_id=end_user_id,
+        is_active=is_active,
+        last_used_at=datetime.now(timezone.utc),
+        locale=locale,
     )
+
+
+def _copy(title="title", body="body", by_locale=None) -> LocalizedNotificationCopy:
+    return LocalizedNotificationCopy(default=NotificationCopy(title=title, body=body), by_locale=by_locale or {})
 
 
 @pytest.mark.asyncio
@@ -172,7 +186,7 @@ async def test_notify_with_zero_active_devices_is_a_no_op():
     service = make_push_service(notification_repository=notification_repository, push_gateway=push_gateway)
     end_user_id = uuid4()
 
-    result = await service.notify(end_user_id=end_user_id, category="prayer", title="Someone prayed", body="body")
+    result = await service.notify(end_user_id=end_user_id, category="prayer", copy=_copy(title="Someone prayed"))
 
     assert result.end_user_id == end_user_id
     assert len(notification_repository.notifications) == 1
@@ -194,7 +208,7 @@ async def test_notify_fans_out_to_every_active_device_and_skips_inactive():
     push_gateway = StubPushGateway()
     service = make_push_service(device_repository=device_repository, push_gateway=push_gateway)
 
-    await service.notify(end_user_id=end_user_id, category="prayer", title="title", body="body")
+    await service.notify(end_user_id=end_user_id, category="prayer", copy=_copy())
 
     assert set(push_gateway.calls[0]["tokens"]) == {"tok-active-1", "tok-active-2"}
 
@@ -212,7 +226,7 @@ async def test_notify_records_success_and_failed_deliveries():
     push_gateway = StubPushGateway(result_by_token={"tok-fail": PushSendResult(token="tok-fail", status=PushSendStatus.FAILED, error="boom")})
     service = make_push_service(device_repository=device_repository, notification_repository=notification_repository, push_gateway=push_gateway)
 
-    await service.notify(end_user_id=end_user_id, category="prayer", title="title", body="body")
+    await service.notify(end_user_id=end_user_id, category="prayer", copy=_copy())
 
     deliveries_by_device = {delivery.device_id: delivery for delivery in notification_repository.recorded_deliveries}
     assert deliveries_by_device[ok_device.id].status == DeliveryStatus.SUCCESS
@@ -231,7 +245,7 @@ async def test_notify_deactivates_device_classified_unregistered():
     push_gateway = StubPushGateway(result_by_token={"tok-gone": PushSendResult(token="tok-gone", status=PushSendStatus.UNREGISTERED, error="not registered")})
     service = make_push_service(device_repository=device_repository, notification_repository=notification_repository, push_gateway=push_gateway)
 
-    await service.notify(end_user_id=end_user_id, category="prayer", title="title", body="body")
+    await service.notify(end_user_id=end_user_id, category="prayer", copy=_copy())
 
     assert device_repository.devices[unregistered_device.device_key].is_active is False
     delivery = notification_repository.recorded_deliveries[0]
@@ -250,7 +264,7 @@ async def test_notify_gateway_exception_records_failed_deliveries_and_does_not_r
     push_gateway = StubPushGateway(raise_error=RuntimeError("FCM unavailable"))
     service = make_push_service(device_repository=device_repository, notification_repository=notification_repository, push_gateway=push_gateway)
 
-    result = await service.notify(end_user_id=end_user_id, category="prayer", title="title", body="body")
+    result = await service.notify(end_user_id=end_user_id, category="prayer", copy=_copy())
 
     assert result is not None
     assert len(notification_repository.recorded_deliveries) == 1
@@ -258,3 +272,125 @@ async def test_notify_gateway_exception_records_failed_deliveries_and_does_not_r
     assert delivery.status == DeliveryStatus.FAILED
     assert delivery.error == "FCM unavailable"
     assert device_repository.devices[device.device_key].is_active is True
+
+
+@pytest.mark.asyncio
+async def test_notify_sends_once_per_locale_group_with_that_group_s_copy():
+    """Two devices set to different system languages must each get copy in their own language."""
+    end_user_id = uuid4()
+    device_repository = StubDeviceRepository()
+    zh_device = _make_device(end_user_id, token="tok-zh", locale="zh-Hant")
+    en_device = _make_device(end_user_id, token="tok-en", locale="en")
+    second_zh_device = _make_device(end_user_id, token="tok-zh-2", locale="zh-Hant")
+    for device in (zh_device, en_device, second_zh_device):
+        device_repository.devices[device.device_key] = device
+
+    push_gateway = StubPushGateway()
+    notification_repository = StubNotificationRepository()
+    service = make_push_service(device_repository=device_repository, notification_repository=notification_repository, push_gateway=push_gateway)
+
+    copy = _copy(
+        title="Someone prayed",
+        body="Open Rooted to see it",
+        by_locale={
+            "zh-Hant": NotificationCopy(title="有人為你禱告", body="打開 Rooted 看看"),
+            "en": NotificationCopy(title="Someone prayed for you", body="Open Rooted to see it"),
+        },
+    )
+    await service.notify(end_user_id=end_user_id, category="prayer", copy=copy)
+
+    assert len(push_gateway.calls) == 2
+    calls_by_title = {call["title"]: call for call in push_gateway.calls}
+    assert set(calls_by_title["有人為你禱告"]["tokens"]) == {"tok-zh", "tok-zh-2"}
+    assert calls_by_title["有人為你禱告"]["body"] == "打開 Rooted 看看"
+    assert calls_by_title["Someone prayed for you"]["tokens"] == ["tok-en"]
+
+    # every device still gets exactly one delivery row
+    assert len(notification_repository.recorded_deliveries) == 3
+    assert {delivery.status for delivery in notification_repository.recorded_deliveries} == {DeliveryStatus.SUCCESS}
+
+
+@pytest.mark.asyncio
+async def test_notify_single_locale_device_set_still_makes_exactly_one_send_call():
+    end_user_id = uuid4()
+    device_repository = StubDeviceRepository()
+    for token in ("tok-1", "tok-2", "tok-3"):
+        device = _make_device(end_user_id, token=token, locale="zh-Hant")
+        device_repository.devices[device.device_key] = device
+
+    push_gateway = StubPushGateway()
+    service = make_push_service(device_repository=device_repository, push_gateway=push_gateway)
+
+    await service.notify(end_user_id=end_user_id, category="prayer", copy=_copy(by_locale={"zh-Hant": NotificationCopy(title="標題", body="內文")}))
+
+    assert len(push_gateway.calls) == 1
+    assert set(push_gateway.calls[0]["tokens"]) == {"tok-1", "tok-2", "tok-3"}
+    assert push_gateway.calls[0]["title"] == "標題"
+
+
+@pytest.mark.asyncio
+async def test_notify_falls_back_to_default_copy_for_unknown_and_missing_locales():
+    end_user_id = uuid4()
+    device_repository = StubDeviceRepository()
+    unknown_locale_device = _make_device(end_user_id, token="tok-ja", locale="ja")
+    no_locale_device = _make_device(end_user_id, token="tok-none", locale=None)
+    for device in (unknown_locale_device, no_locale_device):
+        device_repository.devices[device.device_key] = device
+
+    push_gateway = StubPushGateway()
+    service = make_push_service(device_repository=device_repository, push_gateway=push_gateway)
+
+    await service.notify(
+        end_user_id=end_user_id,
+        category="prayer",
+        copy=_copy(title="fallback", body="fallback body", by_locale={"en": NotificationCopy(title="english", body="english body")}),
+    )
+
+    assert len(push_gateway.calls) == 2  # "ja" and None are distinct groups
+    assert {call["title"] for call in push_gateway.calls} == {"fallback"}
+
+
+@pytest.mark.asyncio
+async def test_notify_gateway_failure_in_one_locale_group_does_not_stop_the_others():
+    end_user_id = uuid4()
+    device_repository = StubDeviceRepository()
+    zh_device = _make_device(end_user_id, token="tok-zh", locale="zh-Hant")
+    en_device = _make_device(end_user_id, token="tok-en", locale="en")
+    for device in (zh_device, en_device):
+        device_repository.devices[device.device_key] = device
+
+    class FailFirstGateway(StubPushGateway):
+        async def send_multicast(self, *, tokens, title, body, data):
+            if "tok-zh" in tokens:
+                self.calls.append({"tokens": tokens, "title": title, "body": body, "data": data})
+                raise RuntimeError("FCM unavailable")
+            return await super().send_multicast(tokens=tokens, title=title, body=body, data=data)
+
+    notification_repository = StubNotificationRepository()
+    push_gateway = FailFirstGateway()
+    service = make_push_service(device_repository=device_repository, notification_repository=notification_repository, push_gateway=push_gateway)
+
+    result = await service.notify(end_user_id=end_user_id, category="prayer", copy=_copy())
+
+    assert result is not None
+    deliveries_by_device = {delivery.device_id: delivery for delivery in notification_repository.recorded_deliveries}
+    assert deliveries_by_device[zh_device.id].status == DeliveryStatus.FAILED
+    assert deliveries_by_device[zh_device.id].error == "FCM unavailable"
+    assert deliveries_by_device[en_device.id].status == DeliveryStatus.SUCCESS
+
+
+@pytest.mark.asyncio
+async def test_notify_persists_the_default_copy_on_the_notification_row():
+    end_user_id = uuid4()
+    notification_repository = StubNotificationRepository()
+    service = make_push_service(notification_repository=notification_repository)
+
+    await service.notify(
+        end_user_id=end_user_id,
+        category="prayer",
+        copy=_copy(title="default title", body="default body", by_locale={"en": NotificationCopy(title="english", body="english body")}),
+    )
+
+    notification = notification_repository.notifications[0]
+    assert notification.title == "default title"
+    assert notification.body == "default body"
