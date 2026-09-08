@@ -117,8 +117,8 @@ The product identity of someone using the Rooted app — anonymous for read-only
 _Avoid_: Member (as the identity noun — that word belongs to **Membership** roles), conflating with **Admin User**, using `auth.user.id` as the product member FK
 
 **Preferences**:
-End-user settings and presentation defaults (display name, locale, theme, font scale, bible version, stage, reminder) — distinct from auth credentials, from **Admin User** profile fields, and from the End user identity key.
-_Avoid_: Admin User profile fields, burying prefs inside fellowship or journal rows
+End-user settings and presentation defaults (display name, theme, font scale, bible version, stage, reminder) — distinct from auth credentials, from **Admin User** profile fields, and from the End user identity key. Does **not** hold UI language: the App always follows the device's system language and never lets the End user override it in-app (ADR 0009).
+_Avoid_: Admin User profile fields, burying prefs inside fellowship or journal rows, a stored `locale` column keyed to the account (language is per-device, not a synced account preference — see **Device**)
 
 **Admin User**:
 Staff account using the **admin** API (`/admin`) for RBAC, content, and moderation — distinct from **shepherd** (group role) and from **End user**. May share the same auth credential as an End user when one person holds both capacities. Signs in with that **Auth credential** via password and/or an **Identity link**; an Identity-provider sign-in alone never creates an Admin User.
@@ -128,12 +128,16 @@ _Avoid_: Operator, treating Membership role as admin, auto-provisioning staff fr
 The sign-in subject in `auth.user`, always identified by a required email, with optional password and zero or more **Identity links**. An **End user** and an **Admin User** may share one credential; product data hangs off **End user**, not off this row. Phone number is not part of this credential.
 _Avoid_: Account (ambiguous), conflating with **End user** / `app.user`, phone-as-login-id
 
+**One-time passcode (OTP)**:
+A short-lived numeric code emailed to a person to authenticate an **End user** — the sole first-party (non-Identity-provider) sign-in path (ADR 0008). Stored ephemerally (e.g. Redis TTL) keyed to the request, never on **Auth credential** or **Identity link** rows.
+_Avoid_: Magic link (superseded by ADR 0008), treating an OTP as a persisted/product-facing entity, phone-delivered OTP (phone is not a Rooted credential identifier)
+
 **Identity provider**:
-A known external sign-in source (e.g. Google, Apple) registered in the auth catalog — not the person’s account at that vendor, and not an OAuth token. **Google** may be used for **Admin User** and (later) **End user** sign-in. **Apple** is only for **End user** sign-in — never for the admin console. Microsoft is not a Rooted Identity provider.
+A known external sign-in source (e.g. Google, Apple) registered in the auth catalog — not the person’s account at that vendor, and not an OAuth token. **Google** is used for both **Admin User** and **End user** sign-in; **Apple** is End-user-only — never for the admin console (ADR 0008). Microsoft is not a Rooted Identity provider.
 _Avoid_: Social network, OAuth client, treating a free-form string as the provider without a catalog entry, Microsoft Entra as an in-scope provider, Apple sign-in for Admin Users
 
 **Identity link**:
-A durable binding from an **Identity provider** subject (and optional provider tenant) to one **Auth credential**. One credential may have many links across providers; at most one active link per credential per provider; each provider subject binds to at most one credential. Used to recognize the same person on later sign-ins — not an OAuth token store and not a product profile. For **Google**, the provider subject is the account’s stable IdP user id (same across Rooted’s different OAuth clients such as admin console vs future app); Rooted does **not** create one Google Identity link per client application. For **End user** sign-in (future), a first successful Identity-provider sign-in may create the Auth credential and End user; for **Admin User** sign-in it only binds to an already-admin credential, and only via **Google** in the admin console. A first Admin Google success that matches by verified email creates the link; later sign-ins resolve primarily by provider subject.
+A durable binding from an **Identity provider** subject (and optional provider tenant) to one **Auth credential**. One credential may have many links across providers; at most one active link per credential per provider; each provider subject binds to at most one credential. Used to recognize the same person on later sign-ins — not an OAuth token store and not a product profile. For **Google**, the provider subject is the account’s stable IdP user id (same across Rooted’s different OAuth clients such as admin console vs the app); Rooted does **not** create one Google Identity link per client application. For **End user** sign-in via Google or Apple (ADR 0008), a first successful Identity-provider sign-in may create the Auth credential and End user; for **Admin User** sign-in it only binds to an already-admin credential, and only via **Google** in the admin console. A first Admin Google success that matches by verified email creates the link; later sign-ins resolve primarily by provider subject.
 _Avoid_: OAuth session, social account, third-party login (as the noun for the row), storing provider access/refresh tokens as the purpose of this concept, matching Admin sign-in by email alone after a link exists, Admin Apple Identity links as a product path, one Google Identity link per OAuth client id
 
 **Report**:
@@ -142,13 +146,17 @@ User flag on fellowship content (prayer, share, etc.) with reason code — feeds
 **Sync**:
 Client ↔ server reconciliation for v1 accounts — not a second product surface; respects journal privacy rules on server.
 
+**Reonboarding flag**:
+An Admin-set signal on an **End user** requiring the App to present onboarding again on next launch, even for steps already completed. Cleared once the client finishes (or skips) the replay (ADR 0008). Distinct from a new End user's ordinary first-time onboarding, which is tracked entirely as local per-step completion state on the client and never synced to the server.
+_Avoid_: a global onboarding version bump (steps are tracked independently on the client, not versioned as a whole), re-running account provisioning logic (this only affects the client's onboarding UI)
+
 ---
 
 ### Push notifications
 
 **Device**:
-An app installation instance identified by a client-generated `device_key`, holding at most one push token and platform, and optionally linked to the **End user** currently signed in on it (nullable — overwritten on sign-in, cleared on sign-out). Exists independently of authentication: registered on first app launch, before any account exists, so an anonymous install can hold a Device row with no End user attached.
-_Avoid_: conflating with **End user** identity; assuming a Device belongs permanently to one account (a shared or re-logged-in device may change hands); Device Token (the token is a field on Device, not a separate concept)
+An app installation instance identified by a client-generated `device_key`, holding at most one push token and platform, and optionally linked to the **End user** currently signed in on it (nullable — overwritten on sign-in, cleared on sign-out). Exists independently of authentication: registered on first app launch, before any account exists, so an anonymous install can hold a Device row with no End user attached. Also carries that install's last-known system locale (ADR 0009) — the source of truth for "what language should this device's push copy be in", since **Preferences** no longer holds one.
+_Avoid_: conflating with **End user** identity; assuming a Device belongs permanently to one account (a shared or re-logged-in device may change hands); Device Token (the token is a field on Device, not a separate concept); treating Device locale as an editable product preference (it's a passive snapshot, not user-facing)
 
 **Notification**:
 A single push-worthy event addressed to one **End user** (e.g. someone prayed for their prayer request). Delivered by fanning out to every active **Device** linked to that End user at send time.
@@ -178,4 +186,4 @@ _Avoid_: a per-End-user read/unread inbox (not yet modeled — future work)
 | PRD | `rooted-docs/docs/product/prd.md` |
 | API spec | `rooted-docs/docs/backend/api-specification.md` |
 | Database design | `rooted-docs/docs/backend/database-design.md` |
-| ADRs | `docs/adr/` (identity storage: ADR 0005; Admin Google: ADR 0006) |
+| ADRs | `docs/adr/` (identity storage: ADR 0005; Admin Google: ADR 0006; direct FCM push: ADR 0007; End-user OTP/Google/Apple sign-in: ADR 0008; language follows device: ADR 0009) |

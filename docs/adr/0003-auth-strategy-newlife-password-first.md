@@ -2,9 +2,9 @@
 
 ## Status
 
-Accepted (Phase 0, 2026-08-27); **updated** (2026-09-05) for app passwordless; **updated** (2026-09-05) for Admin Google via ADR 0006.
+Accepted (Phase 0, 2026-08-27); **updated** (2026-09-05) for app passwordless; **updated** (2026-09-05) for Admin Google via ADR 0006; **superseded in part** (2026-09-06) for End-user auth by **ADR 0008** (email OTP replaces magic link; Google/Apple sign-in added; onboarding registration).
 
-Supersedes the earlier “app password + optional magic link” wording in this ADR. Durable Identity storage is ADR 0005. **Admin Google ID-token HTTP flow** is authorized by **ADR 0006** (not by this ADR alone). End-user Apple/Google HTTP flows still need a future ADR. Microsoft Entra remains out of scope.
+Supersedes the earlier “app password + optional magic link” wording in this ADR. Durable Identity storage is ADR 0005. **Admin Google ID-token HTTP flow** is authorized by **ADR 0006** (not by this ADR alone). **End-user Apple/Google HTTP flows and the magic-link→OTP switch are authorized by ADR 0008.** Microsoft Entra remains out of scope.
 
 ## Context
 
@@ -16,7 +16,7 @@ Product direction for **End users** is **passwordless**: magic-link email login 
 
 1. **Shared infrastructure:** JWT access + refresh tokens, password hashing providers, and refresh rotation/blacklist as enabled — same plumbing for Admin and (when issued) member tokens.
 2. **Admin Users** authenticate via `/admin/api/v1/auth` with **email + password** and/or **Google** (ADR 0006), then RBAC. **No** Microsoft/Entra login. **No** Apple on the admin console.
-3. **App End users** authenticate via **magic link only** (request + verify) until a future ADR adds Apple/Google. Do **not** expose app password register/login as the product path. Magic-link verify may create an Auth credential with `password_hash` null plus End user + Preferences.
+3. **App End users** authenticate via **email OTP, Google, or Apple** (ADR 0008 — superseding the original magic-link-only wording here). Do **not** expose app password register/login as the product path. OTP/Identity-provider verify may create an Auth credential with `password_hash` null plus End user + Preferences.
 4. **Auth credential:** required email; optional password (required for Admin password create/login; Google-linked admins may still keep a password). Zero or more Identity links (ADR 0005). Phone is not a credential identifier.
 5. **Explicitly out of scope here:** Microsoft Entra / Azure AD token exchange, NewLife-style `MicrosoftAuthService`, Admin Apple, and End-user Apple/Google HTTP (future ADR). Generic “port all NewLife OIDC” is not authorized.
 6. **Token policy:** follow product ranges (access ~15–60 minutes, refresh ~7–30 days) via configuration; clients send `Authorization: Bearer`.
