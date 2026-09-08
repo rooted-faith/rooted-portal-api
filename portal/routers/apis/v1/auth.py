@@ -5,15 +5,30 @@ App (End user) authentication HTTP routes.
 from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, status
 
+from portal.application.auth.app_apple_auth_service import AppAppleAuthService
 from portal.application.auth.app_auth_service import AppAuthService
 from portal.application.auth.app_google_auth_service import AppGoogleAuthService
-from portal.application.auth.commands import AppGoogleLoginCommand, AppOtpRequestCommand, AppOtpVerifyCommand, LogoutCommand, RefreshTokenCommand
+from portal.application.auth.commands import (
+    AppAppleLoginCommand,
+    AppGoogleLoginCommand,
+    AppOtpRequestCommand,
+    AppOtpVerifyCommand,
+    LogoutCommand,
+    RefreshTokenCommand,
+)
 from portal.application.auth.mappers import member_login_result_to_api, otp_request_result_to_api, token_result_to_api
 from portal.application.auth.refresh_token_service import RefreshTokenService
 from portal.container import Container
 from portal.libs.depends.rate_limiters import WRITE_RATE_LIMITERS
 from portal.routers.auth_router import AuthRouter
-from portal.serializers.apis.v1.auth import MemberGoogleLoginRequest, MemberLoginResponse, MemberOtpRequest, MemberOtpRequestResponse, MemberOtpVerifyRequest
+from portal.serializers.apis.v1.auth import (
+    MemberAppleLoginRequest,
+    MemberGoogleLoginRequest,
+    MemberLoginResponse,
+    MemberOtpRequest,
+    MemberOtpRequestResponse,
+    MemberOtpVerifyRequest,
+)
 from portal.serializers.mixins import LogoutRequest, LogoutResponse, RefreshTokenRequest, TokenResponse
 
 router: AuthRouter = AuthRouter()
@@ -70,6 +85,23 @@ async def app_verify_otp(body: MemberOtpVerifyRequest, app_auth_service: AppAuth
 @inject
 async def app_google_login(body: MemberGoogleLoginRequest, app_google_auth_service: AppGoogleAuthService = Depends(Provide[Container.app_google_auth_service])):
     result = await app_google_auth_service.login_with_google(AppGoogleLoginCommand(id_token=body.id_token))
+    return member_login_result_to_api(result)
+
+
+@router.post(
+    "/apple",
+    response_model=MemberLoginResponse,
+    response_model_by_alias=True,
+    status_code=status.HTTP_200_OK,
+    require_auth=False,
+    dependencies=[*WRITE_RATE_LIMITERS],
+    operation_id="member_apple_login",
+    summary="Sign in with Apple",
+    description="Resolve a verified Apple identity token to an End user, provisioning the account on first success. Every rejection returns the same generic 401.",
+)
+@inject
+async def app_apple_login(body: MemberAppleLoginRequest, app_apple_auth_service: AppAppleAuthService = Depends(Provide[Container.app_apple_auth_service])):
+    result = await app_apple_auth_service.login_with_apple(AppAppleLoginCommand(id_token=body.id_token))
     return member_login_result_to_api(result)
 
 

@@ -129,6 +129,9 @@ class Configuration(BaseSettings):
     # [End-user Google ID-token sign-in — ADR 0008. Comma-separated Client ID allowlist; empty disables Google app sign-in.]
     GOOGLE_APP_CLIENT_IDS: str = os.getenv(key="GOOGLE_APP_CLIENT_IDS", default="")
 
+    # [End-user Apple identity-token sign-in — ADR 0008. Comma-separated App/Services ID allowlist.]
+    APPLE_APP_CLIENT_IDS: str = os.getenv(key="APPLE_APP_CLIENT_IDS", default="")
+
     # [Member web apps — Origin -> app_code for /api/v1 auth]
     MEMBER_WEB_APPS: str = os.getenv(key="MEMBER_WEB_APPS", default="rooted-app|http://localhost:5174")
 
@@ -248,6 +251,10 @@ class Configuration(BaseSettings):
     @property
     def google_app_client_ids(self) -> list[str]:
         return [client_id.strip() for client_id in self.GOOGLE_APP_CLIENT_IDS.split(",") if client_id.strip()]
+
+    @property
+    def apple_app_client_ids(self) -> list[str]:
+        return [client_id.strip() for client_id in self.APPLE_APP_CLIENT_IDS.split(",") if client_id.strip()]
 
 
 @lru_cache

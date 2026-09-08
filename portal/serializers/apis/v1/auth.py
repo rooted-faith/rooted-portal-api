@@ -31,6 +31,12 @@ class MemberGoogleLoginRequest(BaseModel):
     id_token: str = Field(..., description="Google ID token from the app's Google sign-in client")
 
 
+class MemberAppleLoginRequest(BaseModel):
+    """End-user Sign in with Apple request body (ADR 0008)."""
+
+    id_token: str = Field(..., description="Identity token from Sign in with Apple")
+
+
 class MemberOtpRequestResponse(BaseModel):
     """Anti-enumeration acknowledgement."""
 

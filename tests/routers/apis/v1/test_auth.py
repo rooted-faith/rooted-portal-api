@@ -19,3 +19,8 @@ def test_end_user_password_register_and_login_routes_are_unreachable() -> None:
 
 def test_admin_password_login_route_remains_available() -> None:
     assert "/login" in _post_paths(admin_auth_router)
+
+
+def test_end_user_apple_login_route_is_available_without_an_admin_equivalent() -> None:
+    assert "/apple" in _post_paths(app_auth_router)
+    assert "/apple" not in _post_paths(admin_auth_router)
