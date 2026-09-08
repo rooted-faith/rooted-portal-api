@@ -13,12 +13,12 @@ class ProvisionIdentityCommand(BaseModel):
     """
     Provision a shared auth credential.
 
-    When create_end_user is True (app signup), also create app.user + Preferences.
+    When create_end_user is True, also create app.user + Preferences.
     When False (admin-only), skip End user identity entirely.
     """
 
     email: str = Field(...)
-    password: Optional[str] = Field(default=None, description="Required for Admin/password paths; null for passwordless End users")
+    password: Optional[str] = Field(default=None, description="Required for Admin credential provisioning; null for End-user sign-in provisioning")
     display_name: Optional[str] = Field(default=None)
     create_end_user: bool = Field(default=True)
     is_admin: bool = Field(default=False)
