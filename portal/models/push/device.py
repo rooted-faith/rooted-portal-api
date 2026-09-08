@@ -34,3 +34,4 @@ class PushDevice(ModelBase, AuditMixin):
     is_active = Column(sa.Boolean, nullable=False, server_default=sa.text("true"), comment="Whether this device should receive pushes")
     last_used_at = Column(sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now(), comment="Last time this device registered/refreshed")
     app_version = Column(sa.String(32), nullable=True, comment="Client app version at last registration")
+    locale = Column(sa.String(20), nullable=True, comment="This install's last-known system locale, used to localize push copy (ADR 0009)")

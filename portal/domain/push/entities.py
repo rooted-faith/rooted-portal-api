@@ -29,6 +29,9 @@ class Device(UUIDBaseModel):
     is_active: bool = Field(default=True, description="Whether this device should receive pushes")
     last_used_at: datetime = Field(..., description="Last time this device registered/refreshed")
     app_version: Optional[str] = Field(default=None, description="Client app version at last registration")
+    locale: Optional[str] = Field(
+        default=None, description="This install's last-known system locale (ADR 0009); None for devices registered before the client sent one"
+    )
 
 
 class Notification(UUIDBaseModel):
@@ -61,6 +64,32 @@ class NotificationDeliveryDraft(BaseModel):
     status: DeliveryStatus
     error: Optional[str] = None
     delivered_at: Optional[datetime] = None
+
+
+class NotificationCopy(BaseModel):
+    """The title/body a Notification shows, in one language."""
+
+    title: str = Field(..., description="Notification title")
+    body: str = Field(..., description="Notification body")
+
+
+class LocalizedNotificationCopy(BaseModel):
+    """
+    A Notification's copy in every language the caller could author it in.
+
+    How a category maps to actual wording is the caller's business (ADR 0009 only
+    makes the fan-out locale-aware); `default` covers every Device whose locale has
+    no entry, including devices with no known locale at all.
+    """
+
+    default: NotificationCopy = Field(..., description="Copy used when a Device's locale has no dedicated entry")
+    by_locale: dict[str, NotificationCopy] = Field(default_factory=dict, description="Copy keyed by locale code")
+
+    def for_locale(self, locale: Optional[str]) -> NotificationCopy:
+        """Resolve the copy a Device in `locale` should receive."""
+        if locale is None:
+            return self.default
+        return self.by_locale.get(locale, self.default)
 
 
 class PushSendResult(BaseModel):

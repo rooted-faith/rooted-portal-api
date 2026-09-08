@@ -26,3 +26,9 @@ def test_push_device_is_active_defaults_true() -> None:
     is_active = PushDevice.__table__.c.is_active
     assert is_active.nullable is False
     assert is_active.server_default is not None
+
+
+def test_push_device_carries_its_own_locale() -> None:
+    """ADR 0009: push copy is localized from the Device's own system locale, not an account preference."""
+    assert "locale" in PushDevice.__table__.c
+    assert PushDevice.__table__.c.locale.nullable is True
