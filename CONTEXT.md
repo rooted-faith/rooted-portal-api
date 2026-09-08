@@ -7,7 +7,7 @@ Source of truth for product scope: `rooted-docs/docs/product/prd.md` (v1.0). Thi
 ## Product constraints agents must respect
 
 1. **Today devotion is primary; fellowship is secondary.** Opening the app meets Scripture first, not a timeline.
-2. **Walking with God > task completion.** Completing a day is **Amen** / encounter with God — not “check-in success” or streak shaming.
+2. **Walking with God > task completion.** Completing a day is an **Encounter day** (「今日已與主相遇」) — not “check-in success” or streak shaming.
 3. **No public square:** no likes, follows, leaderboards, or algorithmic discovery in v1.
 4. **Journal stays private:** journal entries, personal prayers, and private lesson notes never surface to groups or analytics content pipelines.
 5. **Small groups only:** target size 4–15; covenant before full fellowship features.
@@ -19,25 +19,29 @@ Source of truth for product scope: `rooted-docs/docs/product/prd.md` (v1.0). Thi
 
 ### Devotion
 
+**Devotion (靈修篇章)**:
+One authored piece of devotional content in the editorial pool: a Scripture **verse** reference plus reflection prompts, today's application, and prayer. Written by Rooted staff, versioned through `draft` → `ready`, and only becomes a **Daily lesson** once scheduled onto a date. Exists independently of any date — an unscheduled Devotion is real content, just not yet anyone's day. Its authored text lives in per-locale **Devotion translation** rows; a Devotion cannot reach `ready` until every locale active in the system locale catalog is filled.
+_Avoid_: calling an unscheduled piece a "daily lesson", storing the Scripture text on it (it holds a **Passage** reference; the text comes from the reader's **Bible version**), one row carrying all locales in JSONB, a hardcoded list of supported languages
+
 **Daily lesson (日課)**:
-The guided unit for a calendar day: passage, reflection prompts, prayer — the core “meet God today” experience.
-_Avoid_: generic “content item”, feed post
+A **Devotion** scheduled onto one calendar date — what the End user meets when they open Today. Identified by its date, not by a position in a course. The backend decides it; the End user never chooses it and the client never resolves it from a bundled catalog. A date with no scheduled Daily lesson is an operational gap that surfaces as an error, never as silently substituted content.
+_Avoid_: generic "content item", feed post, "day N of a series", letting the client pick the day's lesson, auto-filling an unscheduled date from the pool
 
-**Series**:
-An ordered collection of lessons (e.g. a 7-day plan). The platform publishes the catalog; users enroll via **Plan enrollment**.
-_Avoid_: playlist (too casual); treating the client bundle as the only authority
+**Devotion translation**:
+The authored text of one **Devotion** in one locale — reflection prompts, today's application, prayer. One row per locale, never one row carrying all locales. Every locale marked active in the system locale catalog must have a row before the Devotion can reach `ready`, so a reader is never served a half-translated day. No locale is privileged as a base — that idea only existed to name a fallback target, and there is no fallback. Does **not** carry Scripture text — that comes from the reader's **Bible version**.
+_Avoid_: JSONB multi-locale columns, falling back to another locale at read time, treating a missing translation as a runtime concern rather than a publishing gate, hardcoding the language list in devotion code, hanging the rule on the catalog's `is_default` flag (it governs unrelated admin-console behaviour)
 
-**Plan enrollment**:
-A user’s commitment to walk a series from a start date, with optional pause — tracks progress without public ranking.
-_Avoid_: subscription (billing connotation)
+**Encounter day (相遇日)**:
+A record that an End user met God through the **Daily lesson** on one calendar date — one row per user per date. Sign-in required, and recordable **only for the End user's own current local date** (BR-02): there is no backfilling a missed day. Marks spiritual rhythm, never gamified points exposed to others.
+_Avoid_: Amen (the word is a response of assent, not a completion; product copy now says 「今日已與主相遇」), Walk day (「同行」 already names the shepherd's pastoral view), check-in, backfill/make-up days, publicly comparable streaks
 
-**Amen / Walk day**:
-Recording that the user completed today’s devotion encounter for a date. Marks spiritual rhythm, not gamified streak points exposed to others.
-_Avoid_: check-in, streak (as product-facing shame mechanics)
+**Encounter streak**:
+How many consecutive dates an End user has an **Encounter day** for, shown only to that person. The **longest** streak is stored (it only ever grows, and only on a write); the **current** streak is stored alongside the last encounter date but must be re-validated against the reader's local date on every read — an untouched stored "current streak" silently rots the moment a day is missed, because nothing writes on the day someone stops.
+_Avoid_: trusting a stored current-streak value without date validation, exposing either number to other members, "streak broken" copy
 
 **Lesson note**:
-User text tied to a lesson (reflection, highlights). May sync to cloud in v1; **private** unless explicitly shared via fellowship **Share** with chosen privacy.
-_Avoid_: treating all notes as group-visible
+An End user's own writing for one calendar date — free note text plus optional answers to that day's reflection prompts, in one row per user per date. Sign-in required, and writable **only for the current local date**, like an **Encounter day**. Optional throughout: never required to record an Encounter day. **Private** unless explicitly shared via fellowship **Share** with chosen privacy.
+_Avoid_: treating all notes as group-visible, a separate store for reflection answers, keying the note to the pooled **Devotion** (a Devotion may be rescheduled; the writing belongs to the person's day, not to the content), requiring a note before an Encounter day
 
 ---
 
@@ -117,7 +121,7 @@ The product identity of someone using the Rooted app — anonymous for read-only
 _Avoid_: Member (as the identity noun — that word belongs to **Membership** roles), conflating with **Admin User**, using `auth.user.id` as the product member FK
 
 **Preferences**:
-End-user settings and presentation defaults (display name, theme, font scale, bible version, stage, reminder) — distinct from auth credentials, from **Admin User** profile fields, and from the End user identity key. Does **not** hold UI language: the App always follows the device's system language and never lets the End user override it in-app (ADR 0009).
+End-user settings and presentation defaults (display name, theme, font scale, bible version, stage, reminder, week start) — distinct from auth credentials, from **Admin User** profile fields, and from the End user identity key. Includes **week start** (`sunday` | `monday`, default `sunday`) — which day the Today screen's weekly rhythm bar begins on; a personal habit that follows the account across devices, unlike language. Does **not** hold UI language: the App always follows the device's system language and never lets the End user override it in-app (ADR 0009).
 _Avoid_: Admin User profile fields, burying prefs inside fellowship or journal rows, a stored `locale` column keyed to the account (language is per-device, not a synced account preference — see **Device**)
 
 **Admin User**:
@@ -186,4 +190,4 @@ _Avoid_: a per-End-user read/unread inbox (not yet modeled — future work)
 | PRD | `rooted-docs/docs/product/prd.md` |
 | API spec | `rooted-docs/docs/backend/api-specification.md` |
 | Database design | `rooted-docs/docs/backend/database-design.md` |
-| ADRs | `docs/adr/` (identity storage: ADR 0005; Admin Google: ADR 0006; direct FCM push: ADR 0007; End-user OTP/Google/Apple sign-in: ADR 0008; language follows device: ADR 0009) |
+| ADRs | `docs/adr/` (identity storage: ADR 0005; Admin Google: ADR 0006; direct FCM push: ADR 0007; End-user OTP/Google/Apple sign-in: ADR 0008; language follows device: ADR 0009; calendar Daily lesson & no series: ADR 0010; Devotion pool + schedule + per-locale translations: ADR 0011; Encounter streak storage: ADR 0012) |
