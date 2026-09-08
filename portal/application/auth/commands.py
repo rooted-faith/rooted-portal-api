@@ -51,6 +51,12 @@ class AdminGoogleLoginCommand(BaseModel):
     id_token: str = Field(..., description="Google ID token from Google Identity Services")
 
 
+class AppGoogleLoginCommand(BaseModel):
+    """End-user Google ID-token sign-in command (ADR 0008)."""
+
+    id_token: str = Field(..., description="Google ID token from the app's Google sign-in client")
+
+
 class LogoutCommand(BaseModel):
     """Logout command."""
 

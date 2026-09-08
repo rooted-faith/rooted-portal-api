@@ -6,6 +6,8 @@ from dependency_injector import containers, providers
 
 from portal.application.app.end_user_provisioning_service import EndUserProvisioningService
 from portal.application.auth.app_auth_service import AppAuthService
+from portal.application.auth.app_google_auth_service import AppGoogleAuthService
+from portal.application.auth.member_login_service import MemberLoginService
 from portal.application.bible.bible_service import BibleService
 from portal.application.push.push_service import PushService
 from portal.config import settings as app_settings
@@ -52,16 +54,29 @@ class AppContainer(containers.DeclarativeContainer):
     otp_mailer = providers.Singleton(OtpMailer)
 
     member_web_app_registry = providers.Singleton(lambda: MemberWebAppRegistry(parse_member_web_apps(app_settings.MEMBER_WEB_APPS)))
+    member_login_service = providers.Factory(
+        MemberLoginService,
+        user_repository=user_repository,
+        preferences_repository=preferences_repository,
+        jwt_provider=core.jwt_provider,
+        refresh_token_provider=core.refresh_token_provider,
+        member_refresh_app_binding_provider=core.member_refresh_app_binding_provider,
+        member_web_app_registry=member_web_app_registry,
+    )
     app_auth_service = providers.Factory(
         AppAuthService,
         provisioning_service=end_user_provisioning_service,
         user_repository=user_repository,
         end_user_repository=end_user_repository,
-        preferences_repository=preferences_repository,
         otp_token_store=otp_token_store,
         otp_mailer=otp_mailer,
-        jwt_provider=core.jwt_provider,
-        refresh_token_provider=core.refresh_token_provider,
-        member_refresh_app_binding_provider=core.member_refresh_app_binding_provider,
-        member_web_app_registry=member_web_app_registry,
+        member_login_service=member_login_service,
+    )
+    app_google_auth_service = providers.Factory(
+        AppGoogleAuthService,
+        provisioning_service=end_user_provisioning_service,
+        user_repository=user_repository,
+        end_user_repository=end_user_repository,
+        google_id_token_verifier=core.google_id_token_verifier,
+        member_login_service=member_login_service,
     )
