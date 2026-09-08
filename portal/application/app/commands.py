@@ -22,7 +22,6 @@ class ProvisionIdentityCommand(BaseModel):
     create_end_user: bool = Field(default=True)
     is_admin: bool = Field(default=False)
     is_superuser: bool = Field(default=False)
-    locale: str = Field(default="zh-Hant")
     theme: str = Field(default="system")
     font_scale: str = Field(default="M")
     bible_version: str = Field(default="cuv1919")

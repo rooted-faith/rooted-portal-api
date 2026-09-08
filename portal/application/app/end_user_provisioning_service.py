@@ -76,7 +76,6 @@ class EndUserProvisioningService:
                 id=uuid.uuid4(),
                 user_id=end_user_id,
                 display_name=display_name,
-                locale=command.locale,
                 theme=command.theme,
                 font_scale=command.font_scale,
                 bible_version=command.bible_version,

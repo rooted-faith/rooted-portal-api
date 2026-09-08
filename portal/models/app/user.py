@@ -42,7 +42,6 @@ class AppUserPreferences(ModelBase, AuditMixin):
 
     user_id = Column(UUID, sa.ForeignKey(AppUser.id, ondelete="CASCADE"), nullable=False, index=True, comment="FK to app.user.id (End user)")
     display_name = Column(sa.String(100), nullable=False, comment="Display name")
-    locale = Column(sa.String(10), nullable=False, server_default="zh-Hant", comment="Locale tag")
     theme = Column(sa.String(10), nullable=False, server_default="system", comment="Theme: light|dark|system")
     font_scale = Column(sa.String(2), nullable=False, server_default="M", comment="Font scale: S|M|L")
     bible_version = Column(sa.String(20), nullable=False, server_default="cuv1919", comment="Soft bible version key (not a hard FK)")

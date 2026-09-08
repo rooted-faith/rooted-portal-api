@@ -16,6 +16,11 @@ def test_app_user_preferences_maps_to_user_preferences_table() -> None:
     assert AppUserPreferences.__table__.c.user_id.foreign_keys
 
 
+def test_app_user_preferences_has_no_account_level_locale_column() -> None:
+    """ADR 0009: UI language follows each Device's system locale — never a synced account Preference."""
+    assert "locale" not in AppUserPreferences.__table__.c
+
+
 def test_auth_user_profile_remains_admin_oriented_separate_from_app_prefs() -> None:
     assert AuthUserProfile.__table__.schema == "auth"
     assert AuthUserProfile.__tablename__ == "user_profile"
