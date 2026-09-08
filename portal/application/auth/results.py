@@ -139,7 +139,7 @@ class MemberLoginResult(BaseModel):
     token: TokenResult = Field(..., description="Issued tokens")
 
 
-class MagicLinkRequestResult(BaseModel):
-    """Anti-enumeration acknowledgement after requesting a magic link."""
+class OtpRequestResult(BaseModel):
+    """Anti-enumeration acknowledgement after requesting a one-time passcode."""
 
     message: str = Field(..., description="Generic success message")

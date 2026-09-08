@@ -13,6 +13,7 @@ __all__ = [
     "NotFoundException",  # 404
     "ConflictErrorException",  # 409
     "EntityTooLargeException",  # 413
+    "TooManyRequestsException",  # 429
     "NotImplementedException",  # 501
     # auth
     "InvalidTokenException",  # 401

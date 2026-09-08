@@ -19,7 +19,7 @@ class EndUserProvisioningService:
     """
     App signup creates auth.user + app.user + Preferences together.
     Admin-only provisioning creates the credential without app.user.
-    Password may be omitted for passwordless (magic-link) End users.
+    Password may be omitted for passwordless (email-OTP) End users.
     """
 
     def __init__(
@@ -55,7 +55,7 @@ class EndUserProvisioningService:
         display_name = self._default_display_name(email, command.display_name)
 
         auth_user_id = uuid.uuid4()
-        # Magic-link verify and password signup both mark verified for app use;
+        # OTP verify and password signup both mark verified for app use;
         # admin-only rows stay unverified until an admin path confirms them.
         await self._user_repository.create_credential(
             auth_user_id=auth_user_id,

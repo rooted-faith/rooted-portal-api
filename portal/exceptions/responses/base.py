@@ -62,6 +62,16 @@ class EntityTooLargeException(ApiBaseException):
         super().__init__(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=detail, headers=headers, **kwargs)
 
 
+class TooManyRequestsException(ApiBaseException):
+    """
+    Too Many Requests Exception
+    status_code: 429
+    """
+
+    def __init__(self, detail: str = "Too many requests", headers: Optional[Dict[str, Any]] = None, **kwargs):
+        super().__init__(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=detail, headers=headers, **kwargs)
+
+
 class NotImplementedException(ApiBaseException):
     """
     Not Implemented Exception

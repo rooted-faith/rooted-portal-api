@@ -61,6 +61,17 @@ def get_resolved_locale_id() -> Optional[UUID]:
     return ctx.resolved_locale_id
 
 
+def get_resolved_locale_code() -> Optional[str]:
+    """
+    Return the locale code CoreRequestMiddleware resolved from Accept-Language for the
+    current request, or None if context is not set (e.g. background task) or locale is unresolved.
+    """
+    ctx = get_request_context()
+    if ctx is None:
+        return None
+    return ctx.resolved_locale_code
+
+
 def reset_request_context(token) -> None:
     """
     Reset the request context for current request.
