@@ -8,6 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from portal.domain.app.constants import WeekStart
+
 
 class ProvisionIdentityCommand(BaseModel):
     """
@@ -35,3 +37,16 @@ class RequestReonboardingCommand(BaseModel):
     """Admin asks one End user to go through onboarding again (ADR 0008)."""
 
     end_user_id: UUID = Field(..., description="app.user.id of the End user to flag")
+
+
+class UpdatePreferencesCommand(BaseModel):
+    """Fields a signed-in End user may update on their Preferences."""
+
+    display_name: Optional[str] = Field(default=None)
+    theme: Optional[str] = Field(default=None)
+    font_scale: Optional[str] = Field(default=None)
+    bible_version: Optional[str] = Field(default=None)
+    stage: Optional[str] = Field(default=None)
+    reminder_time: Optional[time] = Field(default=None)
+    reminder_enabled: Optional[bool] = Field(default=None)
+    week_start: Optional[WeekStart] = Field(default=None)

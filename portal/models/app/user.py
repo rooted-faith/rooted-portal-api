@@ -41,7 +41,11 @@ class AppUserPreferences(ModelBase, AuditMixin):
     bible_version is a soft string catalog key, not a hard FK to bible.versions.
     """
 
-    __extra_table_args__ = (sa.UniqueConstraint("user_id"), {"comment": "End user Preferences 1:1 with app.user (not auth.user_profile)"})
+    __extra_table_args__ = (
+        sa.UniqueConstraint("user_id"),
+        sa.CheckConstraint("week_start IN ('sunday', 'monday')", name="week_start"),
+        {"comment": "End user Preferences 1:1 with app.user (not auth.user_profile)"},
+    )
 
     user_id = Column(UUID, sa.ForeignKey(AppUser.id, ondelete="CASCADE"), nullable=False, index=True, comment="FK to app.user.id (End user)")
     display_name = Column(sa.String(100), nullable=False, comment="Display name")
@@ -51,3 +55,4 @@ class AppUserPreferences(ModelBase, AuditMixin):
     stage = Column(sa.String(20), nullable=True, comment="Stage: seeking|growing|serving")
     reminder_time = Column(sa.Time(), nullable=True, comment="Daily reminder time")
     reminder_enabled = Column(sa.Boolean, nullable=False, server_default=sa.text("false"), comment="Whether reminder is enabled")
+    week_start = Column(sa.String(10), nullable=False, server_default="sunday", comment="Week start: sunday|monday")
