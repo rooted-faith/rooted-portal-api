@@ -24,6 +24,7 @@ from .auth import (
 )
 from .bible import BibleBook, BibleVerse, BibleVersion
 from .content import ContentFile, ContentFileAssociation, ContentLegalDocument, ContentLegalDocumentTranslation
+from .devotion import Devotion, DevotionDailyLessonSchedule, DevotionTranslation
 from .push import PushDevice, PushNotification, PushNotificationDelivery
 from .system_locale import SystemLocale
 from .system_setting import SystemSetting
@@ -66,6 +67,10 @@ __all__ = [
     "BibleBook",
     "BibleVerse",
     "BibleVersion",
+    # devotion
+    "Devotion",
+    "DevotionTranslation",
+    "DevotionDailyLessonSchedule",
     # push
     "PushDevice",
     "PushNotification",

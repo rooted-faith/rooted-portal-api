@@ -137,7 +137,7 @@ Rooted v1 domains (from PRD and `rooted-docs`). Use these folder names when addi
 
 | Context        | Responsibility                                                                 | API prefix (app)        |
 | -------------- | ------------------------------------------------------------------------------ | ----------------------- |
-| **devotion**   | Daily lesson flow, series/plans, Amen (`WalkDay`), lesson notes tied to devotion | `/api/v1/devotion`      |
+| **devotion**   | Calendar Daily lessons, Devotion content, Encounter days, and private notes keyed to date | `/api/v1/devotion`      |
 | **bible**      | Licensed/public-domain text, versions, passages, bookmarks                     | `/api/v1/bible`         |
 | **journal**    | Private journal entries, personal prayers, memory cards — **never** group-visible | `/api/v1/journal`   |
 | **fellowship** | Groups, covenant, prayer wall, encouragements, shares (no v1 DMs)              | `/api/v1/groups`, `/fellowship` |
