@@ -11,6 +11,7 @@ from portal.application.auth.app_auth_service import AppAuthService
 from portal.application.auth.app_google_auth_service import AppGoogleAuthService
 from portal.application.auth.member_login_service import MemberLoginService
 from portal.application.bible.bible_service import BibleService
+from portal.application.devotion.devotion_service import DevotionService
 from portal.application.push.push_service import PushService
 from portal.config import settings as app_settings
 from portal.domain.auth.member_web_app import MemberWebAppRegistry, parse_member_web_apps
@@ -18,6 +19,7 @@ from portal.infrastructure.cache.otp_token_cache import OtpTokenCache
 from portal.infrastructure.mail.otp_mailer import OtpMailer
 from portal.infrastructure.persistence.repositories.app.end_user_repository import EndUserRepository, PreferencesRepository
 from portal.infrastructure.persistence.repositories.bible.bible_repository import BibleRepository
+from portal.infrastructure.persistence.repositories.devotion.devotion_repository import DevotionRepository
 from portal.infrastructure.persistence.repositories.push.device_repository import DeviceRepository
 from portal.infrastructure.persistence.repositories.push.notification_repository import NotificationRepository
 from portal.infrastructure.persistence.repositories.user_repository import UserRepository
@@ -30,6 +32,8 @@ class AppContainer(containers.DeclarativeContainer):
 
     bible_repository = providers.Factory(BibleRepository, session=core.request_session)
     bible_service = providers.Factory(BibleService, bible_repository=bible_repository)
+    devotion_repository = providers.Factory(DevotionRepository, session=core.request_session)
+    devotion_service = providers.Factory(DevotionService, devotion_repository=devotion_repository)
 
     user_repository = providers.Factory(UserRepository, session=core.request_session)
     end_user_repository = providers.Factory(EndUserRepository, session=core.request_session)
