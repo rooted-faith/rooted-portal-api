@@ -82,7 +82,6 @@ async def test_register_end_user_creates_credential_end_user_and_preferences():
         email="member@example.com",
         password="Secure1!",
         display_name="林安",
-        locale="zh-Hant",
         theme="system",
         font_scale="M",
         bible_version="cuv1919",
@@ -110,7 +109,7 @@ async def test_register_end_user_creates_credential_end_user_and_preferences():
     prefs = prefs_repo.created[0]
     assert prefs.user_id == result.end_user_id
     assert prefs.display_name == "林安"
-    assert prefs.locale == "zh-Hant"
+    assert not hasattr(prefs, "locale")  # language is per-device, never an account Preference (ADR 0009)
     assert prefs.theme == "system"
     assert prefs.font_scale == "M"
     assert prefs.bible_version == "cuv1919"

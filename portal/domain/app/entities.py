@@ -24,7 +24,6 @@ class UserPreferences(UUIDBaseModel):
 
     user_id: UUID = Field(..., description="FK to app.user.id (End user), not auth.user")
     display_name: str = Field(...)
-    locale: str = Field(default="zh-Hant")
     theme: str = Field(default="system")
     font_scale: str = Field(default="M")
     # Soft string catalog key (e.g. cuv1919); not a hard FK to bible.versions.
