@@ -14,3 +14,12 @@ class AnonymousDailyLessonResponse(BaseModel):
     date: date
     passage: PassageResponse
     locked: list[str] = Field(default_factory=list)
+
+
+class DailyLessonResponse(BaseModel):
+    date: date
+    passage: PassageResponse
+    reflect: list[str] = Field(default_factory=list)
+    apply: str
+    pray: str
+    locked: list[str] = Field(default_factory=list)
