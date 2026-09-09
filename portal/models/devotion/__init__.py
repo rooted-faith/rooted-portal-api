@@ -1,3 +1,3 @@
-from .devotion import Devotion, DevotionDailyLessonSchedule, DevotionTranslation
+from .devotion import Devotion, DevotionDailyLessonSchedule, DevotionTranslation, EncounterDay, EncounterStreak
 
-__all__ = ["Devotion", "DevotionDailyLessonSchedule", "DevotionTranslation"]
+__all__ = ["Devotion", "DevotionDailyLessonSchedule", "DevotionTranslation", "EncounterDay", "EncounterStreak"]

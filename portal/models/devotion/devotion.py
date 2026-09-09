@@ -5,6 +5,7 @@ from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from portal.libs.database.orm import ModelBase
+from portal.models.app import AppUser
 from portal.models.mixins import AuditCreatedAtMixin, AuditUpdatedAtMixin
 from portal.models.system_locale import SystemLocale
 
@@ -35,3 +36,21 @@ class DevotionDailyLessonSchedule(ModelBase, AuditCreatedAtMixin, AuditUpdatedAt
 
     date = Column(sa.Date, nullable=False, unique=True)
     devotion_id = Column(UUID, sa.ForeignKey(Devotion.id), nullable=False, index=True)
+
+
+class EncounterDay(ModelBase, AuditCreatedAtMixin):
+    __tablename__ = "encounter_days"
+    __extra_table_args__ = (sa.UniqueConstraint("user_id", "date"), {"comment": "One private Encounter day per End user and date"})
+
+    user_id = Column(UUID, sa.ForeignKey(AppUser.id, ondelete="CASCADE"), nullable=False, index=True)
+    date = Column(sa.Date, nullable=False, index=True)
+
+
+class EncounterStreak(ModelBase, AuditUpdatedAtMixin):
+    __tablename__ = "encounter_streaks"
+    __extra_table_args__ = ({"comment": "Stored longest streak and current-streak write cache (ADR 0012)"},)
+
+    user_id = Column(UUID, sa.ForeignKey(AppUser.id, ondelete="CASCADE"), nullable=False, unique=True)
+    longest_streak = Column(sa.Integer, nullable=False, server_default="0")
+    current_streak_length = Column(sa.Integer, nullable=False, server_default="0")
+    last_encounter_date = Column(sa.Date, nullable=True)

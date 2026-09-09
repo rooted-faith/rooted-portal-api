@@ -1,4 +1,5 @@
 from datetime import date
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -23,3 +24,10 @@ class DailyLesson(BaseModel):
     apply: str
     pray: str
     locked: list[str] = Field(default_factory=list)
+
+
+class EncounterStreak(BaseModel):
+    user_id: UUID
+    longest_streak: int
+    current_streak_length: int
+    last_encounter_date: date | None

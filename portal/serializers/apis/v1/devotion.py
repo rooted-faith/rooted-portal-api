@@ -23,3 +23,20 @@ class DailyLessonResponse(BaseModel):
     apply: str
     pray: str
     locked: list[str] = Field(default_factory=list)
+
+
+class EncounterRequest(BaseModel):
+    date: date
+
+
+class EncounterResponse(BaseModel):
+    date: date
+    current_streak: int = Field(serialization_alias="currentStreak")
+    longest_streak: int = Field(serialization_alias="longestStreak")
+    message: str
+
+
+class RhythmResponse(BaseModel):
+    current_streak: int = Field(serialization_alias="currentStreak")
+    longest_streak: int = Field(serialization_alias="longestStreak")
+    recent_dates: list[date] = Field(default_factory=list, serialization_alias="recentDates")
