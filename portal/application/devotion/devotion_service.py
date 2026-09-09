@@ -1,5 +1,4 @@
 from datetime import date, timedelta
-from typing import Callable
 from uuid import UUID
 
 from portal.application.devotion.results import EncounterResult, RhythmResult
@@ -7,17 +6,14 @@ from portal.domain.app.ports import EndUserRepositoryPort
 from portal.domain.devotion.constants import DevotionErrorCode
 from portal.domain.devotion.entities import AnonymousDailyLesson, DailyLesson, EncounterStreak
 from portal.domain.devotion.ports import DevotionRepositoryPort
-from portal.exceptions.responses import BadRequestException, NotFoundException, UnauthorizedException
+from portal.exceptions.responses import NotFoundException, UnauthorizedException
 from portal.libs.tracing.distributed_trace import distributed_trace
 
 
 class DevotionService:
-    def __init__(
-        self, devotion_repository: DevotionRepositoryPort, end_user_repository: EndUserRepositoryPort, local_date_provider: Callable[[], date] = date.today
-    ):
+    def __init__(self, devotion_repository: DevotionRepositoryPort, end_user_repository: EndUserRepositoryPort):
         self._repository = devotion_repository
         self._end_user_repository = end_user_repository
-        self._local_date_provider = local_date_provider
 
     @distributed_trace()
     async def get_daily_lesson(
@@ -38,8 +34,6 @@ class DevotionService:
 
     @distributed_trace()
     async def record_encounter(self, *, auth_user_id: UUID, encounter_date: date) -> EncounterResult:
-        if encounter_date != self._local_date_provider():
-            raise BadRequestException(detail="Encounter day must be the caller's current local date")
         end_user_id = await self._get_end_user_id(auth_user_id)
         inserted = await self._repository.insert_encounter_day(end_user_id, encounter_date)
         streak = await self._repository.get_encounter_streak(end_user_id)
