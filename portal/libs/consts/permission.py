@@ -25,6 +25,7 @@ class Resource(Enum):
     SYSTEM_SETTING = "system:setting"
     CONTENT_FILE = "content:file"
     CONTENT_LEGAL_DOCUMENT = "content:legal_document"
+    CONTENT_DEVOTION = "content:devotion"
     SUPPORT_END_USER = "support:end_user"
 
 
@@ -66,4 +67,5 @@ class Permission:
     SYSTEM_SETTING = PermissionCode(Resource.SYSTEM_SETTING)
     CONTENT_FILE = PermissionCode(Resource.CONTENT_FILE)
     CONTENT_LEGAL_DOCUMENT = PermissionCode(Resource.CONTENT_LEGAL_DOCUMENT)
+    CONTENT_DEVOTION = PermissionCode(Resource.CONTENT_DEVOTION)
     SUPPORT_END_USER = PermissionCode(Resource.SUPPORT_END_USER)

@@ -36,6 +36,7 @@ class BibleBook(UUIDBaseModel):
 class BibleVerse(BaseModel):
     """Single verse line."""
 
+    passage_id: str = Field(...)
     verse: int = Field(...)
     content: str = Field(...)
 
