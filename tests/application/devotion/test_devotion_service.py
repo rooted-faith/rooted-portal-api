@@ -7,7 +7,7 @@ from portal.application.devotion.devotion_service import DevotionService
 from portal.domain.app.entities import EndUser
 from portal.domain.devotion.constants import DevotionErrorCode
 from portal.domain.devotion.entities import AnonymousDailyLesson, DailyLesson, EncounterStreak, Passage
-from portal.exceptions.responses import NotFoundException
+from portal.exceptions.responses import BadRequestException, NotFoundException
 
 
 class StubDevotionRepository:
@@ -132,12 +132,13 @@ async def test_record_encounter_starts_a_new_streak_after_a_missed_day():
     end_user = EndUser(id=UUID("22222222-2222-2222-2222-222222222222"), auth_user_id=auth_user_id)
     previous_streak = EncounterStreak(user_id=end_user.id, longest_streak=4, current_streak_length=4, last_encounter_date=date(2026, 9, 6))
     repository = StubDevotionRepository(streak=previous_streak)
-    service = DevotionService(repository, StubEndUserRepository(end_user))
+    service = DevotionService(repository, StubEndUserRepository(end_user), local_date_provider=lambda: date(2026, 9, 8))
 
     result = await service.record_encounter(auth_user_id=auth_user_id, encounter_date=date(2026, 9, 8))
 
     assert result.current_streak == 1
     assert result.longest_streak == 4
+    assert result.welcome_back is True
     assert repository.saved_streak.current_streak_length == 1
     assert repository.saved_streak.last_encounter_date == date(2026, 9, 8)
 
@@ -148,12 +149,13 @@ async def test_record_encounter_is_idempotent_for_the_same_day():
     end_user = EndUser(id=UUID("22222222-2222-2222-2222-222222222222"), auth_user_id=auth_user_id)
     existing_streak = EncounterStreak(user_id=end_user.id, longest_streak=5, current_streak_length=5, last_encounter_date=date(2026, 9, 8))
     repository = StubDevotionRepository(inserted=False, streak=existing_streak)
-    service = DevotionService(repository, StubEndUserRepository(end_user))
+    service = DevotionService(repository, StubEndUserRepository(end_user), local_date_provider=lambda: date(2026, 9, 8))
 
     result = await service.record_encounter(auth_user_id=auth_user_id, encounter_date=date(2026, 9, 8))
 
     assert result.current_streak == 5
     assert result.longest_streak == 5
+    assert result.welcome_back is False
     assert repository.saved_streak is None
 
 
@@ -164,12 +166,13 @@ async def test_record_encounter_extends_current_and_longest_streak_from_yesterda
     repository = StubDevotionRepository(
         streak=EncounterStreak(user_id=end_user.id, longest_streak=4, current_streak_length=4, last_encounter_date=date(2026, 9, 7))
     )
-    service = DevotionService(repository, StubEndUserRepository(end_user))
+    service = DevotionService(repository, StubEndUserRepository(end_user), local_date_provider=lambda: date(2026, 9, 8))
 
     result = await service.record_encounter(auth_user_id=auth_user_id, encounter_date=date(2026, 9, 8))
 
     assert result.current_streak == 5
     assert result.longest_streak == 5
+    assert result.welcome_back is False
 
 
 @pytest.mark.asyncio
@@ -177,7 +180,7 @@ async def test_get_rhythm_treats_a_stored_streak_as_broken_after_two_days():
     auth_user_id = UUID("11111111-1111-1111-1111-111111111111")
     end_user = EndUser(id=UUID("22222222-2222-2222-2222-222222222222"), auth_user_id=auth_user_id)
     repository = StubDevotionRepository(
-        streak=EncounterStreak(user_id=end_user.id, longest_streak=12, current_streak_length=5, last_encounter_date=date(2026, 9, 6)),
+        streak=EncounterStreak(user_id=end_user.id, longest_streak=365, current_streak_length=365, last_encounter_date=date(2026, 1, 1)),
         recent_dates=[date(2026, 9, 5), date(2026, 9, 6)],
     )
     service = DevotionService(repository, StubEndUserRepository(end_user))
@@ -185,8 +188,8 @@ async def test_get_rhythm_treats_a_stored_streak_as_broken_after_two_days():
     result = await service.get_rhythm(auth_user_id=auth_user_id, reader_date=date(2026, 9, 8))
 
     assert result.current_streak == 0
-    assert result.longest_streak == 12
-    assert result.recent_dates == [date(2026, 9, 5), date(2026, 9, 6)]
+    assert result.longest_streak == 365
+    assert result.completed_dates == [date(2026, 9, 5), date(2026, 9, 6)]
 
 
 @pytest.mark.asyncio
@@ -201,3 +204,12 @@ async def test_get_rhythm_keeps_current_streak_when_last_encounter_was_yesterday
     result = await service.get_rhythm(auth_user_id=auth_user_id, reader_date=date(2026, 9, 8))
 
     assert result.current_streak == 5
+
+
+@pytest.mark.asyncio
+async def test_record_encounter_rejects_a_date_other_than_today():
+    auth_user_id = UUID("11111111-1111-1111-1111-111111111111")
+    service = DevotionService(StubDevotionRepository(), StubEndUserRepository(None), local_date_provider=lambda: date(2026, 9, 8))
+
+    with pytest.raises(BadRequestException):
+        await service.record_encounter(auth_user_id=auth_user_id, encounter_date=date(2026, 9, 7))

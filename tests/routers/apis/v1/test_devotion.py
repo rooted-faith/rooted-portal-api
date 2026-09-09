@@ -27,10 +27,10 @@ class StubDevotionService:
         return AnonymousDailyLesson(date=lesson_date, passage=Passage(start="JHN.3.16", end="JHN.3.16", ref="John 3:16", verses=["Verse text"]))
 
     async def record_encounter(self, *, auth_user_id, encounter_date):
-        return EncounterResult(date=encounter_date, current_streak=5, longest_streak=12)
+        return EncounterResult(date=encounter_date, current_streak=5, longest_streak=12, welcome_back=False)
 
     async def get_rhythm(self, *, auth_user_id, reader_date):
-        return RhythmResult(current_streak=5, longest_streak=12, recent_dates=[date(2026, 9, 7), reader_date])
+        return RhythmResult(current_streak=5, longest_streak=12, completed_dates=[date(2026, 9, 7), reader_date])
 
 
 def stub_request_context(monkeypatch, user_context=None):
@@ -143,7 +143,7 @@ async def test_record_encounter_response_uses_camel_case_without_data_wrapper(mo
     response = await record_encounter(request=EncounterRequest(date=date(2026, 9, 8)), devotion_service=StubDevotionService())
     payload = response.model_dump(mode="json", by_alias=True)
 
-    assert payload == {"date": "2026-09-08", "currentStreak": 5, "longestStreak": 12, "message": "今日已與主相遇"}
+    assert payload == {"date": "2026-09-08", "currentStreak": 5, "longestStreak": 12, "welcomeBack": False, "message": "今日已與主相遇"}
 
 
 @pytest.mark.asyncio
@@ -153,4 +153,4 @@ async def test_get_rhythm_response_uses_camel_case_without_data_wrapper(monkeypa
     response = await get_rhythm(date_=date(2026, 9, 8), devotion_service=StubDevotionService())
     payload = response.model_dump(mode="json", by_alias=True)
 
-    assert payload == {"currentStreak": 5, "longestStreak": 12, "recentDates": ["2026-09-07", "2026-09-08"]}
+    assert payload == {"currentStreak": 5, "longestStreak": 12, "completedDates": ["2026-09-07", "2026-09-08"]}

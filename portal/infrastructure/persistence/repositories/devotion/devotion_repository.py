@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -42,7 +42,7 @@ class DevotionRepository:
             .on_conflict_do_update(
                 index_elements=["user_id"],
                 set_={
-                    "longest_streak": streak.longest_streak,
+                    "longest_streak": sa.func.greatest(EncounterStreakModel.longest_streak, streak.longest_streak),
                     "current_streak_length": streak.current_streak_length,
                     "last_encounter_date": streak.last_encounter_date,
                     "updated_at": sa.func.now(),
@@ -55,6 +55,7 @@ class DevotionRepository:
         return await (
             self._session.select(EncounterDay.date)
             .where(EncounterDay.user_id == user_id)
+            .where(EncounterDay.date >= through_date - timedelta(days=34))
             .where(EncounterDay.date <= through_date)
             .order_by(EncounterDay.date)
             .fetchvals()
