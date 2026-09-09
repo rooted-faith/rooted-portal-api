@@ -4,14 +4,7 @@ Bible repository — SQLAlchemy-backed Scripture reads.
 
 from uuid import UUID
 
-from portal.domain.bible.entities import (
-    BibleBook,
-    BibleChapter,
-    BibleSearchHit,
-    BibleSearchPage,
-    BibleVerse,
-    BibleVersion,
-)
+from portal.domain.bible.entities import BibleBook, BibleChapter, BibleSearchHit, BibleSearchPage, BibleVerse, BibleVersion
 from portal.libs.database import Session
 from portal.models import BibleBook as BibleBookModel
 from portal.models import BibleVerse as BibleVerseModel
@@ -39,10 +32,7 @@ class BibleRepository:
         if language:
             query = query.where(BibleVersionModel.language_tag.ilike(f"{language}%"))
 
-        rows: list[BibleVersion] = await query.order_by(
-            BibleVersionModel.language_tag,
-            BibleVersionModel.youversion_bible_id,
-        ).fetch(as_model=BibleVersion)
+        rows: list[BibleVersion] = await query.order_by(BibleVersionModel.language_tag, BibleVersionModel.youversion_bible_id).fetch(as_model=BibleVersion)
         return rows or []
 
     async def version_is_active(self, bible_version_id: UUID) -> bool:
@@ -91,10 +81,7 @@ class BibleRepository:
             return None
 
         verses: list[BibleVerse] = await (
-            self._session.select(
-                BibleVerseModel.verse,
-                BibleVerseModel.content,
-            )
+            self._session.select(BibleVerseModel.passage_id, BibleVerseModel.verse, BibleVerseModel.content)
             .where(BibleVerseModel.book_id == book_id)
             .where(BibleVerseModel.chapter == chapter)
             .order_by(BibleVerseModel.verse)
@@ -112,14 +99,7 @@ class BibleRepository:
             verses=verses or [],
         )
 
-    async def search_verses(
-        self,
-        q: str,
-        bible_version_id: UUID | None,
-        book_id: UUID | None,
-        limit: int,
-        offset: int,
-    ) -> BibleSearchPage:
+    async def search_verses(self, q: str, bible_version_id: UUID | None, book_id: UUID | None, limit: int, offset: int) -> BibleSearchPage:
         query = (
             self._session.select(
                 BibleVersionModel.id.label("bible_version_id"),
@@ -145,12 +125,7 @@ class BibleRepository:
 
         total = await query.count()
         results: list[BibleSearchHit] = await (
-            query.order_by(
-                BibleVersionModel.youversion_bible_id,
-                BibleBookModel.sequence,
-                BibleVerseModel.chapter,
-                BibleVerseModel.verse,
-            )
+            query.order_by(BibleVersionModel.youversion_bible_id, BibleBookModel.sequence, BibleVerseModel.chapter, BibleVerseModel.verse)
             .limit(limit)
             .offset(offset)
             .fetch(as_model=BibleSearchHit)
