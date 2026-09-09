@@ -1,7 +1,7 @@
 """
 App End user and Preferences tables under the app schema.
 
-Product FKs (journal, groups, walk days, …) reference AppUser.id — not AuthUser.id.
+Product FKs (journal, groups, Encounter days, …) reference AppUser.id — not AuthUser.id.
 """
 
 import sqlalchemy as sa

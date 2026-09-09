@@ -1,11 +1,12 @@
-from datetime import date
+from datetime import date, timedelta
 from uuid import UUID
 
 import sqlalchemy as sa
 
-from portal.domain.devotion.entities import AnonymousDailyLesson, DailyLesson, Passage
+from portal.domain.devotion.entities import AnonymousDailyLesson, DailyLesson, EncounterStreak, Passage
 from portal.libs.database import Session
-from portal.models import BibleBook, BibleVerse, BibleVersion, Devotion, DevotionDailyLessonSchedule, DevotionTranslation
+from portal.models import BibleBook, BibleVerse, BibleVersion, Devotion, DevotionDailyLessonSchedule, DevotionTranslation, EncounterDay
+from portal.models import EncounterStreak as EncounterStreakModel
 
 
 class DevotionRepository:
@@ -15,6 +16,50 @@ class DevotionRepository:
     async def daily_lesson_exists(self, lesson_date: date) -> bool:
         schedule_id = await self._session.select(DevotionDailyLessonSchedule.id).where(DevotionDailyLessonSchedule.date == lesson_date).fetchval()
         return schedule_id is not None
+
+    async def insert_encounter_day(self, user_id: UUID, encounter_date: date) -> bool:
+        status = await (
+            self._session.insert(EncounterDay).values(user_id=user_id, date=encounter_date).on_conflict_do_nothing(index_elements=["user_id", "date"]).execute()
+        )
+        return status == "INSERT 0 1"
+
+    async def get_encounter_streak(self, user_id: UUID) -> EncounterStreak | None:
+        return await (
+            self._session.select(
+                EncounterStreakModel.user_id,
+                EncounterStreakModel.longest_streak,
+                EncounterStreakModel.current_streak_length,
+                EncounterStreakModel.last_encounter_date,
+            )
+            .where(EncounterStreakModel.user_id == user_id)
+            .fetchrow(as_model=EncounterStreak)
+        )
+
+    async def save_encounter_streak(self, streak: EncounterStreak) -> None:
+        await (
+            self._session.insert(EncounterStreakModel)
+            .values(**streak.model_dump())
+            .on_conflict_do_update(
+                index_elements=["user_id"],
+                set_={
+                    "longest_streak": sa.func.greatest(EncounterStreakModel.longest_streak, streak.longest_streak),
+                    "current_streak_length": streak.current_streak_length,
+                    "last_encounter_date": streak.last_encounter_date,
+                    "updated_at": sa.func.now(),
+                },
+            )
+            .execute()
+        )
+
+    async def list_recent_encounter_dates(self, user_id: UUID, through_date: date) -> list[date]:
+        return await (
+            self._session.select(EncounterDay.date)
+            .where(EncounterDay.user_id == user_id)
+            .where(EncounterDay.date >= through_date - timedelta(days=34))
+            .where(EncounterDay.date <= through_date)
+            .order_by(EncounterDay.date)
+            .fetchvals()
+        )
 
     async def fetch_daily_lesson(
         self, lesson_date: date, locale_id: UUID | None, locale_code: str | None, include_authored_sections: bool

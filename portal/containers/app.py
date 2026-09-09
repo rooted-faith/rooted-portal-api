@@ -34,11 +34,11 @@ class AppContainer(containers.DeclarativeContainer):
     bible_repository = providers.Factory(BibleRepository, session=core.request_session)
     bible_service = providers.Factory(BibleService, bible_repository=bible_repository)
     devotion_repository = providers.Factory(DevotionRepository, session=core.request_session)
-    devotion_service = providers.Factory(DevotionService, devotion_repository=devotion_repository)
 
     user_repository = providers.Factory(UserRepository, session=core.request_session)
     end_user_repository = providers.Factory(EndUserRepository, session=core.request_session)
     preferences_repository = providers.Factory(PreferencesRepository, session=core.request_session)
+    devotion_service = providers.Factory(DevotionService, devotion_repository=devotion_repository, end_user_repository=end_user_repository)
 
     device_repository = providers.Factory(DeviceRepository, session=core.request_session)
     notification_repository = providers.Factory(NotificationRepository, session=core.request_session)

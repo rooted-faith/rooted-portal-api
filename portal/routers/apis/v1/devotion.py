@@ -5,14 +5,22 @@ from fastapi import Depends, Path, Query
 from starlette import status
 
 from portal.application.devotion.devotion_service import DevotionService
-from portal.application.devotion.mappers import daily_lesson_to_api
+from portal.application.devotion.mappers import daily_lesson_to_api, encounter_result_to_api, rhythm_result_to_api
 from portal.container import Container
+from portal.exceptions.responses import UnauthorizedException
 from portal.libs.contexts.request_context import get_request_context, get_resolved_locale_code, get_resolved_locale_id
 from portal.libs.contexts.user_context import get_user_context
 from portal.routers.auth_router import AuthRouter
-from portal.serializers.apis.v1.devotion import AnonymousDailyLessonResponse, DailyLessonResponse
+from portal.serializers.apis.v1.devotion import AnonymousDailyLessonResponse, DailyLessonResponse, EncounterRequest, EncounterResponse, RhythmResponse
 
 router: AuthRouter = AuthRouter(require_auth=False, optional_auth=True)
+
+
+def _auth_user_id():
+    user_context = get_user_context()
+    if user_context is None or user_context.user_id is None:
+        raise UnauthorizedException()
+    return user_context.user_id
 
 
 async def _read_daily_lesson(lesson_date: date, devotion_service: DevotionService) -> AnonymousDailyLessonResponse | DailyLessonResponse:
@@ -60,3 +68,35 @@ async def get_daily_lesson(
     date_: date = Path(alias="date"), devotion_service: DevotionService = Depends(Provide[Container.devotion_service])
 ) -> AnonymousDailyLessonResponse | DailyLessonResponse:
     return await _read_daily_lesson(date_, devotion_service)
+
+
+@router.post(
+    path="/encounters",
+    require_auth=True,
+    optional_auth=False,
+    response_model=EncounterResponse,
+    response_model_by_alias=True,
+    status_code=status.HTTP_200_OK,
+    operation_id="record_encounter",
+    summary="Record today's Encounter day",
+)
+@inject
+async def record_encounter(request: EncounterRequest, devotion_service: DevotionService = Depends(Provide[Container.devotion_service])) -> EncounterResponse:
+    result = await devotion_service.record_encounter(auth_user_id=_auth_user_id(), encounter_date=request.date)
+    return encounter_result_to_api(result)
+
+
+@router.get(
+    path="/rhythm",
+    require_auth=True,
+    optional_auth=False,
+    response_model=RhythmResponse,
+    response_model_by_alias=True,
+    status_code=status.HTTP_200_OK,
+    operation_id="get_encounter_rhythm",
+    summary="Get the End user's Encounter rhythm",
+)
+@inject
+async def get_rhythm(date_: date = Query(alias="date"), devotion_service: DevotionService = Depends(Provide[Container.devotion_service])) -> RhythmResponse:
+    result = await devotion_service.get_rhythm(auth_user_id=_auth_user_id(), reader_date=date_)
+    return rhythm_result_to_api(result)
