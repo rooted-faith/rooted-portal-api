@@ -16,6 +16,16 @@ def test_app_user_preferences_maps_to_user_preferences_table() -> None:
     assert AppUserPreferences.__table__.c.user_id.foreign_keys
 
 
+def test_app_user_preferences_has_sunday_week_start_default() -> None:
+    column = AppUserPreferences.__table__.c.week_start
+
+    assert column.nullable is False
+    assert column.server_default is not None
+    assert column.server_default.arg == "sunday"
+    constraints = {str(constraint.sqltext) for constraint in AppUserPreferences.__table__.constraints if hasattr(constraint, "sqltext")}
+    assert "week_start IN ('sunday', 'monday')" in constraints
+
+
 def test_app_user_preferences_has_no_account_level_locale_column() -> None:
     """ADR 0009: UI language follows each Device's system locale — never a synced account Preference."""
     assert "locale" not in AppUserPreferences.__table__.c

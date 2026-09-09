@@ -66,6 +66,7 @@ class PreferencesRepository:
                 stage=preferences.stage,
                 reminder_time=preferences.reminder_time,
                 reminder_enabled=preferences.reminder_enabled,
+                week_start=preferences.week_start,
             )
             .execute()
         )
@@ -83,7 +84,13 @@ class PreferencesRepository:
                 AppUserPreferences.stage,
                 AppUserPreferences.reminder_time,
                 AppUserPreferences.reminder_enabled,
+                AppUserPreferences.week_start,
             )
             .where(AppUserPreferences.user_id == user_id)
             .fetchrow(as_model=UserPreferences)
         )
+
+    async def update_preferences(self, user_id: UUID, values: dict[str, object]) -> Optional[UserPreferences]:
+        if values:
+            await self._session.update(AppUserPreferences).values(**values).where(AppUserPreferences.user_id == user_id).execute()
+        return await self.get_by_user_id(user_id)

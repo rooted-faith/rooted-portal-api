@@ -55,6 +55,7 @@ class RootContainer(containers.DeclarativeContainer):
     devotion_service = app.devotion_service
     end_user_provisioning_service = app.end_user_provisioning_service
     end_user_service = app.end_user_service
+    preferences_service = app.preferences_service
     app_auth_service = app.app_auth_service
     app_apple_auth_service = app.app_apple_auth_service
     app_google_auth_service = app.app_google_auth_service

@@ -10,6 +10,7 @@ from uuid import UUID
 
 from pydantic import Field
 
+from portal.domain.app.constants import WeekStart
 from portal.domain.common.mixins import UUIDBaseModel
 
 
@@ -34,3 +35,4 @@ class UserPreferences(UUIDBaseModel):
     stage: Optional[str] = Field(default=None)
     reminder_time: Optional[time] = Field(default=None)
     reminder_enabled: bool = Field(default=False)
+    week_start: WeekStart = Field(default="sunday")
